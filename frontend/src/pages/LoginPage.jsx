@@ -10,20 +10,8 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [testStatus, setTestStatus] = useState(null);
     const { login } = useAuth();
     const navigate = useNavigate();
-
-    const testConnection = async () => {
-        setTestStatus('testing');
-        try {
-            const { data } = await api.get('/health');
-            setTestStatus(`SUCCESS: ${data.message}`);
-        } catch (err) {
-            setTestStatus(`FAILED: ${err.message}`);
-            console.error('[Atlas Debug] Connection test failed:', err);
-        }
-    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -33,7 +21,6 @@ export default function LoginPage() {
             await login(email, password);
             navigate('/');
         } catch (err) {
-            console.error('[Atlas Auth] Login failed:', err);
             setError(err.response?.data?.detail || 'Failed to login');
         } finally {
             setIsLoading(false);

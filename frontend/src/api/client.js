@@ -13,8 +13,6 @@ const api = axios.create({
     baseURL,
 });
 
-console.log('[Atlas API] Base URL:', api.defaults.baseURL);
-
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem('access_token');
     if (token) {
