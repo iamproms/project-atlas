@@ -1,6 +1,12 @@
 import axios from 'axios';
 
-const rawBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+let rawBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// Auto-prefix https if protocol is missing and it's not localhost
+if (rawBaseUrl && !rawBaseUrl.startsWith('http') && !rawBaseUrl.includes('localhost')) {
+    rawBaseUrl = `https://${rawBaseUrl}`;
+}
+
 const baseURL = rawBaseUrl.endsWith('/') ? rawBaseUrl.slice(0, -1) : rawBaseUrl;
 
 const api = axios.create({
