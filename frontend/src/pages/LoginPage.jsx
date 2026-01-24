@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import api, { baseURL } from '../api/client';
+import api from '../api/client';
 import loginHero from '../assets/login-hero.png';
 import { ArrowRight, Lock, Mail } from 'lucide-react';
 
@@ -64,27 +64,6 @@ export default function LoginPage() {
                         </div>
                         <h2 className="text-3xl font-bold tracking-tight mb-2">Welcome back</h2>
                         <p className="text-text-secondary">Please enter your details to sign in.</p>
-
-                        {/* Connection Debug Info */}
-                        <div className="mt-4 p-3 bg-surface/30 border border-border-subtle/50 rounded-lg text-[10px] uppercase tracking-tighter font-mono">
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="text-text-secondary/50">API Base:</span>
-                                <span className="text-primary truncate ml-2">{baseURL}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-text-secondary/50">Status:</span>
-                                <span className={testStatus?.includes('SUCCESS') ? 'text-green-500' : 'text-accent'}>
-                                    {testStatus || 'Not Tested'}
-                                </span>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={testConnection}
-                                className="w-full mt-2 py-1 px-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded transition-colors text-[9px] font-bold"
-                            >
-                                Test Connection
-                            </button>
-                        </div>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
