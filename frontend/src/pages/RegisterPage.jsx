@@ -25,7 +25,9 @@ export default function RegisterPage() {
             navigate('/login');
         } catch (err) {
             console.error('[Atlas Auth] Registration failed:', err);
-            setError(err.response?.data?.detail || 'Registration failed');
+            const detail = err.response?.data?.detail;
+            const message = err.message || 'Unknown error';
+            setError(detail || `Registration failed: ${message}`);
         } finally {
             setIsLoading(false);
         }
