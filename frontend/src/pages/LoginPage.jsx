@@ -20,6 +20,7 @@ export default function LoginPage() {
             await login(email, password);
             navigate('/');
         } catch (err) {
+            console.error('[Atlas Auth] Login failed:', err);
             setError(err.response?.data?.detail || 'Failed to login');
         } finally {
             setIsLoading(false);
