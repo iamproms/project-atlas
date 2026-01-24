@@ -13,6 +13,13 @@ from jose import JWTError, jwt
 
 app = FastAPI(title="Atlas API")
 
+@app.on_event("startup")
+async def startup():
+    # Create tables if they don't exist (for V1 simplicity)
+    async with database.engine.begin() as conn:
+        await conn.run_sync(models.Base.metadata.create_all)
+    print("Database tables initialized.")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
