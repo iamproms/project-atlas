@@ -64,6 +64,11 @@ export default function LoginPage() {
                         </div>
                         <h2 className="text-3xl font-bold tracking-tight mb-2">Welcome back</h2>
                         <p className="text-text-secondary">Please enter your details to sign in.</p>
+
+                        {/* Connection Debug Info */}
+                        <div className="mt-4 p-2 bg-surface/30 border border-border-subtle/50 rounded-lg text-[10px] uppercase tracking-tighter font-mono text-text-secondary/50">
+                            API: <span className="text-primary/70">{import.meta.env.VITE_API_URL || 'http://localhost:8000 (LOCAL)'}</span>
+                        </div>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">

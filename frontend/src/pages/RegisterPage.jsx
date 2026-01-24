@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api/client';
 import loginHero from '../assets/login-hero.png';
 import { ArrowRight, Lock, Mail, User } from 'lucide-react';
 
@@ -17,7 +17,7 @@ export default function RegisterPage() {
         setError('');
         setIsLoading(true);
         try {
-            await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/auth/register`, {
+            await api.post('/auth/register', {
                 email,
                 password,
                 full_name: fullName
