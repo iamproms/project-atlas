@@ -5,7 +5,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./atlas.db")
+# Detect Railway environment and ensure data directory exists for persistence
+DATA_DIR = "/app/data"
+if not os.path.exists(DATA_DIR) and os.access("/app", os.W_OK):
+    try:
+        os.makedirs(DATA_DIR)
+    except:
+        DATA_DIR = "."
+else:
+    DATA_DIR = "."
+
+DEFAULT_DB = f"sqlite+aiosqlite:///{DATA_DIR}/atlas.db"
+DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DB)
 
 engine = create_async_engine(
     DATABASE_URL, 
