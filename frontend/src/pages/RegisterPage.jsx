@@ -24,6 +24,7 @@ export default function RegisterPage() {
             });
             navigate('/login');
         } catch (err) {
+            console.error('[Atlas Auth] Registration failed:', err);
             setError(err.response?.data?.detail || 'Registration failed');
         } finally {
             setIsLoading(false);

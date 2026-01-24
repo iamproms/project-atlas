@@ -202,6 +202,10 @@ async def reset_password(
 async def read_users_me(current_user = Depends(auth.get_current_user)):
     return current_user
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "message": "Atlas API is online"}
+
 @app.get("/")
 async def root():
     return {"message": "Welcome to Atlas API"}

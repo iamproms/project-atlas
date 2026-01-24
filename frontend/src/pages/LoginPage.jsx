@@ -1,10 +1,21 @@
-import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
-import loginHero from '../assets/login-hero.png';
-import { ArrowRight, Lock, Mail } from 'lucide-react';
+import api, { baseURL } from '../api/client';
+// ... (rest of imports)
 
 export default function LoginPage() {
+    // ... (state)
+    const [testStatus, setTestStatus] = useState(null);
+
+    const testConnection = async () => {
+        setTestStatus('testing');
+        try {
+            const { data } = await api.get('/health');
+            setTestStatus(`SUCCESS: ${data.message}`);
+        } catch (err) {
+            setTestStatus(`FAILED: ${err.message}`);
+            console.error('[Atlas Debug] Connection test failed:', err);
+        }
+    };
+    // ...
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
