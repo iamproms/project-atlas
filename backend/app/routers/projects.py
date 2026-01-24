@@ -86,3 +86,48 @@ async def set_project_focus(
     await db.commit()
     await db.refresh(db_focus)
     return db_focus
+@router.put("/{project_id}", response_model=schemas.Project)
+async def update_project(
+    project_id: str,
+    project_update: schemas.ProjectCreate, # Reusing Create schema for simplicity
+    db: AsyncSession = Depends(database.get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
+):
+    import uuid
+    uid = uuid.UUID(project_id)
+    result = await db.execute(
+        select(models.Project).where(
+            and_(models.Project.id == uid, models.Project.user_id == current_user.id)
+        )
+    )
+    db_project = result.scalar_one_or_none()
+    if not db_project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    db_project.name = project_update.name
+    db_project.description = project_update.description
+    
+    await db.commit()
+    await db.refresh(db_project)
+    return db_project
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(
+    project_id: str,
+    db: AsyncSession = Depends(database.get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
+):
+    import uuid
+    uid = uuid.UUID(project_id)
+    result = await db.execute(
+        select(models.Project).where(
+            and_(models.Project.id == uid, models.Project.user_id == current_user.id)
+        )
+    )
+    db_project = result.scalar_one_or_none()
+    if not db_project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    await db.delete(db_project)
+    await db.commit()
+    return None

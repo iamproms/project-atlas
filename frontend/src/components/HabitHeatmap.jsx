@@ -55,40 +55,27 @@ export default function HabitHeatmap({ habits }) {
             logsByDate[dateKey].push(log);
         });
 
-        // 2. Determine "Perfect Days" (all habits completed)
-        const perfectDays = new Set();
+        // 2. Determine "Active Days" (at least one habit completed)
+        const activeDays = new Set();
         Object.keys(logsByDate).forEach(date => {
             const dayLogs = logsByDate[date];
-            // Check if every habit in the `habits` array has a completed log for this date
-            const allHabitsCompleted = habits.every(h => {
-                const log = dayLogs.find(l => l.habit_id === h.id);
-                return log && log.completed;
-            });
-            if (allHabitsCompleted) perfectDays.add(date);
+            const anyHabitCompleted = dayLogs.some(l => l.completed);
+            if (anyHabitCompleted) activeDays.add(date);
         });
 
         // 3. Count streak backwards from today
         let streak = 0;
         let checkDate = new Date();
-
-        // Normalize today
         checkDate.setHours(0, 0, 0, 0);
 
-        // Check up to 365 days back
         for (let i = 0; i < 365; i++) {
             const dateStr = format(checkDate, 'yyyy-MM-dd');
 
-            if (perfectDays.has(dateStr)) {
+            if (activeDays.has(dateStr)) {
                 streak++;
             } else {
-                // Allow "today" to be incomplete without breaking streak if yesterday was perfect
-                // BUT if we are checking today (i=0) and it's not perfect, we don't count it, but we continue to yesterday.
-                // Actually standard streak logic: if today is NOT done, current streak is 0?
-                // Or is it the streak ENDING yesterday?
-                // Let's go with: if today is NOT done, check yesterday. If yesterday is done, streak is active (but doesn't include today).
-                // If yesterday is NOT done, streak is 0.
                 if (i === 0) {
-                    // Just skip today if not done, don't break yet
+                    // Skip today if not done yet
                 } else {
                     break;
                 }

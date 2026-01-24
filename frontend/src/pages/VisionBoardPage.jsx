@@ -8,8 +8,7 @@ import { differenceInDays, format } from 'date-fns';
 
 const MOCK_INITIAL_IMAGES = [
     { id: 1, src: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80', caption: 'Dream Office' },
-    { id: 2, src: 'https://images.unsplash.com/photo-1526304640152-d4619684e484?auto=format&fit=crop&w=800&q=80', caption: 'Financial Freedom' },
-    { id: 3, src: 'https://images.unsplash.com/photo-1547483954-50b31d683526?auto=format&fit=crop&w=800&q=80', caption: 'Travel to Japan' },
+    { id: 2, src: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?auto=format&fit=crop&w=800&q=80', caption: 'Financial Freedom' },
     { id: 4, src: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=800&q=80', caption: 'Fitness Goals' },
     { id: 5, src: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=800&q=80', caption: 'Community' },
 ];
@@ -23,7 +22,7 @@ export default function VisionBoardPage() {
     const [isAddingImage, setIsAddingImage] = useState(false);
 
     // Countdown Logic (simplified for now)
-    const targetDate = new Date('2026-01-01'); // End of Year Goal
+    const targetDate = new Date('2027-01-01'); // End of Year Goal
     const daysLeft = differenceInDays(targetDate, new Date());
 
     const handleAddImage = (e) => {

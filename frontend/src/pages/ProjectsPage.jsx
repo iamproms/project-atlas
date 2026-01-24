@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
-import { Plus, Trash2, Layout, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, Edit3, Save, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function ProjectsPage() {
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
+    const [editingId, setEditingId] = useState(null);
     const queryClient = useQueryClient();
 
     const { data: projects = [] } = useQuery({
@@ -18,15 +19,39 @@ export default function ProjectsPage() {
         mutationFn: (newProject) => api.post('/projects', newProject),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['projects'] });
-            setName('');
-            setDescription('');
+            resetForm();
         }
     });
+
+    const updateProject = useMutation({
+        mutationFn: (data) => api.put(`/projects/${data.id}`, data.fields),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+            resetForm();
+        }
+    });
+
+    const resetForm = () => {
+        setName('');
+        setDescription('');
+        setEditingId(null);
+    };
+
+    const handleEdit = (project) => {
+        setName(project.name);
+        setDescription(project.description || '');
+        setEditingId(project.id);
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!name.trim()) return;
-        createProject.mutate({ name, description });
+
+        if (editingId) {
+            updateProject.mutate({ id: editingId, fields: { name, description } });
+        } else {
+            createProject.mutate({ name, description });
+        }
     };
 
     return (
@@ -69,12 +94,21 @@ export default function ProjectsPage() {
                             </div>
                             <button
                                 type="submit"
-                                disabled={createProject.isPending}
+                                disabled={createProject.isPending || updateProject.isPending}
                                 className="w-full py-3 bg-primary text-background rounded-xl text-sm font-bold hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg"
                             >
-                                <Plus size={16} />
-                                {createProject.isPending ? 'Syncing...' : 'Create Project'}
+                                {editingId ? <Save size={16} /> : <Plus size={16} />}
+                                {editingId ? (updateProject.isPending ? 'Syncing...' : 'Save Project') : (createProject.isPending ? 'Syncing...' : 'Create Project')}
                             </button>
+                            {editingId && (
+                                <button
+                                    type="button"
+                                    onClick={resetForm}
+                                    className="w-full py-2 text-[10px] font-bold uppercase tracking-widest text-text-secondary hover:text-text-primary"
+                                >
+                                    Cancel Editing
+                                </button>
+                            )}
                         </form>
                     </section>
                 </div>
@@ -98,8 +132,13 @@ export default function ProjectsPage() {
                                         <div className="space-y-2">
                                             <div className="flex items-start justify-between">
                                                 <h4 className="font-bold text-lg text-text-primary group-hover:text-primary transition-colors">{project.name}</h4>
-                                                <div className="p-2 rounded-full bg-surface/50 text-text-secondary group-hover:text-primary transition-colors">
-                                                    <Layout size={16} />
+                                                <div className="flex gap-1">
+                                                    <button
+                                                        onClick={() => handleEdit(project)}
+                                                        className="p-2 rounded-full bg-surface/50 text-text-secondary hover:text-primary transition-colors"
+                                                    >
+                                                        <Edit3 size={14} />
+                                                    </button>
                                                 </div>
                                             </div>
                                             <p className="text-sm text-text-secondary leading-relaxed line-clamp-3">

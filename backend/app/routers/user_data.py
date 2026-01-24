@@ -25,6 +25,9 @@ async def update_user_profile(
 
     if user_update.full_name is not None:
         current_user.full_name = user_update.full_name
+
+    if user_update.ai_personality is not None:
+        current_user.ai_personality = user_update.ai_personality
         
     await db.commit()
     await db.refresh(current_user)

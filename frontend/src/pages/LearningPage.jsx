@@ -29,13 +29,11 @@ import {
 } from 'recharts';
 
 const SOUNDS = {
-    'Rain': 'https://cdn.pixabay.com/download/audio/2022/03/24/audio_cda845b36b.mp3?filename=rain-and-thunder-16705.mp3', // Example placeholder
-    'White Noise': 'https://cdn.pixabay.com/download/audio/2021/08/09/audio_88447e769f.mp3?filename=white-noise-8117.mp3' // Example placeholder
+    'Rain': 'https://www.soundjay.com/nature/sounds/rain-07.mp3',
+    'White Noise': 'https://www.soundjay.com/misc/sounds/white-noise-01.mp3'
 };
 
 import { useTimer } from '../context/TimerContext';
-
-// ... imports
 
 export default function LearningPage() {
     const today = startOfDay(new Date());
@@ -60,7 +58,9 @@ export default function LearningPage() {
     const [resources, setResources] = useState('');
     const [mode, setMode] = useState('timer'); // 'timer' | 'manual' | 'feynman'
     const [manualDuration, setManualDuration] = useState('');
-    const [customMinutes, setCustomMinutes] = useState(''); // New Custom Input
+    const [customMinutes, setCustomMinutes] = useState('');
+    const [feynmanTopic, setFeynmanTopic] = useState('');
+    const [feynmanExplanation, setFeynmanExplanation] = useState('');
 
     const [activeSound, setActiveSound] = useState(null);
     const audioRef = React.useRef(null);
@@ -321,6 +321,8 @@ export default function LearningPage() {
                                         <input
                                             className="w-full bg-transparent border-b border-border-subtle focus:border-primary outline-none py-2 text-lg font-medium"
                                             placeholder="What topic are you trying to master?"
+                                            value={feynmanTopic}
+                                            onChange={(e) => setFeynmanTopic(e.target.value)}
                                         />
                                     </div>
 
@@ -333,6 +335,8 @@ export default function LearningPage() {
                                             className="w-full bg-transparent outline-none text-sm text-text-secondary resize-none"
                                             rows={4}
                                             placeholder="Explain it as if you were teaching a 5-year-old. Identify gaps in your knowledge."
+                                            value={feynmanExplanation}
+                                            onChange={(e) => setFeynmanExplanation(e.target.value)}
                                         />
                                     </div>
 
@@ -342,7 +346,18 @@ export default function LearningPage() {
                                             Review & Simplify
                                         </h3>
                                         <p className="text-xs text-text-secondary mb-2">Use analogies. Remove jargon. If you get stuck, go back to the source material.</p>
-                                        <button className="w-full py-2 rounded-lg bg-surface hover:bg-hover border border-border-subtle text-xs font-bold transition-all">
+                                        <button
+                                            onClick={async () => {
+                                                const content = `Feynman Session: ${feynmanTopic}\n\nExplanation:\n${feynmanExplanation}`;
+                                                try {
+                                                    await api.put(`/daily-notes/${dateStr}`, { content });
+                                                    alert("Note saved to Journal!");
+                                                } catch (err) {
+                                                    alert("Failed to save note.");
+                                                }
+                                            }}
+                                            className="w-full py-2 rounded-lg bg-surface hover:bg-hover border border-border-subtle text-xs font-bold transition-all"
+                                        >
                                             Save Note to Journal
                                         </button>
                                     </div>
