@@ -1,9 +1,18 @@
+import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate, Link } from 'react-router-dom';
 import api, { baseURL } from '../api/client';
-// ... (rest of imports)
+import loginHero from '../assets/login-hero.png';
+import { ArrowRight, Lock, Mail } from 'lucide-react';
 
 export default function LoginPage() {
-    // ... (state)
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const [testStatus, setTestStatus] = useState(null);
+    const { login } = useAuth();
+    const navigate = useNavigate();
 
     const testConnection = async () => {
         setTestStatus('testing');
@@ -15,13 +24,6 @@ export default function LoginPage() {
             console.error('[Atlas Debug] Connection test failed:', err);
         }
     };
-    // ...
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const { login } = useAuth();
-    const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -77,8 +79,24 @@ export default function LoginPage() {
                         <p className="text-text-secondary">Please enter your details to sign in.</p>
 
                         {/* Connection Debug Info */}
-                        <div className="mt-4 p-2 bg-surface/30 border border-border-subtle/50 rounded-lg text-[10px] uppercase tracking-tighter font-mono text-text-secondary/50">
-                            API: <span className="text-primary/70">{import.meta.env.VITE_API_URL || 'http://localhost:8000 (LOCAL)'}</span>
+                        <div className="mt-4 p-3 bg-surface/30 border border-border-subtle/50 rounded-lg text-[10px] uppercase tracking-tighter font-mono">
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-text-secondary/50">API Base:</span>
+                                <span className="text-primary truncate ml-2">{baseURL}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-text-secondary/50">Status:</span>
+                                <span className={testStatus?.includes('SUCCESS') ? 'text-green-500' : 'text-accent'}>
+                                    {testStatus || 'Not Tested'}
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={testConnection}
+                                className="w-full mt-2 py-1 px-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded transition-colors text-[9px] font-bold"
+                            >
+                                Test Connection
+                            </button>
                         </div>
                     </div>
 
