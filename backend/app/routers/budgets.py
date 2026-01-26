@@ -27,7 +27,8 @@ async def create_or_update_budget(
     stmt = select(models.Budget).where(
         and_(
             models.Budget.user_id == current_user.id,
-            models.Budget.category == budget_in.category
+            models.Budget.category == budget_in.category,
+            models.Budget.period == budget_in.period
         )
     )
     result = await db.execute(stmt)

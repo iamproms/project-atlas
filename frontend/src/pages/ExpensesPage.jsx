@@ -13,7 +13,47 @@ import {
     ResponsiveContainer,
     Cell
 } from 'recharts';
-import { Wallet, TrendingUp, Calendar, ArrowRight } from 'lucide-react';
+import { Wallet, TrendingUp, Calendar, ArrowRight, Plus, Info, Download, Trash2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+function TransactionHistory({ today }) {
+    const { data: transactions = [] } = useQuery({
+        queryKey: ['finance', 'transactions', today],
+        queryFn: () => api.get(`/finance/transactions/${today}`).then(res => res.data)
+    });
+
+    const queryClient = useQueryClient();
+    const deleteTx = useMutation({
+        mutationFn: (id) => api.delete(`/finance/transactions/${id}`),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['finance'] })
+    });
+
+    if (transactions.length === 0) return <p className="text-[10px] text-text-secondary italic text-center py-4">No transactions logged for today.</p>;
+
+    return (
+        <div className="space-y-1">
+            {transactions.map(tx => (
+                <div key={tx.id} className="group flex items-center justify-between py-2 hover:bg-hover px-3 -mx-3 rounded-xl transition-all text-sm border border-transparent hover:border-border-subtle">
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <div className={`w-2 h-2 rounded-full ${tx.type === 'INCOME' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-accent shadow-[0_0_8px_rgba(239,68,68,0.4)]'}`} />
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-text-primary font-medium truncate">{tx.description}</span>
+                            <span className="text-[9px] uppercase font-bold text-text-secondary/60 tracking-widest">{tx.category}</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <span className={`font-bold tabular-nums ${tx.type === 'INCOME' ? 'text-emerald-500' : 'text-text-primary'}`}>
+                            {tx.type === 'INCOME' ? '+' : ''}₦{tx.amount.toLocaleString()}
+                        </span>
+                        <button onClick={() => deleteTx.mutate(tx.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-text-secondary hover:text-accent">
+                            <Trash2 size={14} />
+                        </button>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
 
 const CATEGORIES = [
     { label: 'Food & Dining', value: 'Food', color: '#2eaadc' },
@@ -38,74 +78,38 @@ const DEFAULT_BUDGETS = {
 export default function ExpensesPage() {
     const today = new Date();
     const queryClient = useQueryClient();
-    const startOfCurrentWeek = startOfWeek(today, { weekStartsOn: 1 });
-    const endOfCurrentWeek = endOfWeek(today, { weekStartsOn: 1 });
 
-    // Summary Query for the last 30 days
-    const { data: summary = {} } = useQuery({
-        queryKey: ['expenses', 'summary', '30days'],
-        queryFn: () => api.get('/expenses/stats/summary', {
-            params: {
-                start_date: format(subDays(today, 30), 'yyyy-MM-dd'),
-                end_date: format(today, 'yyyy-MM-dd')
-            }
-        }).then(res => res.data)
+    // Accounts Query
+    const { data: accounts = [] } = useQuery({
+        queryKey: ['finance', 'accounts'],
+        queryFn: () => api.get('/finance/accounts').then(res => res.data)
     });
 
-    const { data: dailySummary = {} } = useQuery({
-        queryKey: ['expenses', 'summary', 'daily'],
-        queryFn: () => api.get('/expenses/stats/summary', {
-            params: {
-                start_date: format(today, 'yyyy-MM-dd'),
-                end_date: format(today, 'yyyy-MM-dd')
-            }
-        }).then(res => res.data)
+    // Summary Query (Last Week vs This Week)
+    const { data: financeSummary = {} } = useQuery({
+        queryKey: ['finance', 'summary'],
+        queryFn: () => api.get('/finance/summary').then(res => res.data)
     });
 
-    const { data: weeklySummary = {} } = useQuery({
-        queryKey: ['expenses', 'summary', 'weekly'],
-        queryFn: () => api.get('/expenses/stats/summary', {
-            params: {
-                start_date: format(startOfCurrentWeek, 'yyyy-MM-dd'),
-                end_date: format(endOfCurrentWeek, 'yyyy-MM-dd')
-            }
-        }).then(res => res.data)
+    const createAccount = useMutation({
+        mutationFn: (newAcc) => api.post('/finance/accounts', newAcc),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['finance', 'accounts'] })
     });
 
-    const { data: userBudgets = [] } = useQuery({
-        queryKey: ['budgets'],
-        queryFn: () => api.get('/budgets/').then(res => res.data)
-    });
+    // Derived stats from financeSummary
+    const { this_week = { expense: 0, income: 0 }, last_week = { expense: 0, income: 0 }, net_worth = 0, categories_30d = {} } = financeSummary;
 
-    const budgetMap = useMemo(() => {
-        const map = { ...DEFAULT_BUDGETS };
-        userBudgets.forEach(b => {
-            map[b.category] = b.amount;
-        });
-        return map;
-    }, [userBudgets]);
-
-    const updateBudget = useMutation({
-        mutationFn: (newBudget) => api.post('/budgets/', newBudget),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] })
-    });
-
-    // Expenses for the current week to build trend
-    const dayInterval = eachDayOfInterval({ start: startOfCurrentWeek, end: endOfCurrentWeek });
-
-    // In a real app, you'd have a specific trend endpoint.
-    // Totals
-    const monthlyTotal = Object.values(summary).reduce((a, b) => a + b, 0);
-    const weeklyTotal = Object.values(weeklySummary).reduce((a, b) => a + b, 0);
-    const dailyTotal = Object.values(dailySummary).reduce((a, b) => a + b, 0);
+    const expenseChange = last_week.expense > 0
+        ? ((this_week.expense - last_week.expense) / last_week.expense) * 100
+        : 0;
 
     const chartData = useMemo(() => {
         return CATEGORIES.map(cat => ({
             name: cat.label,
-            value: summary[cat.value] || 0,
+            value: categories_30d[cat.value] || 0,
             color: cat.color
         })).filter(d => d.value > 0);
-    }, [summary]);
+    }, [categories_30d]);
 
     const { theme } = useTheme();
     const axisColor = theme === 'dark' ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)";
@@ -113,141 +117,158 @@ export default function ExpensesPage() {
     const tooltipBg = theme === 'dark' ? "#202020" : "#ffffff";
     const tooltipBorder = theme === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)";
 
+    const handleDownloadCSV = () => {
+        window.open(`${api.defaults.baseURL}/finance/export/csv`, '_blank');
+    };
+
     return (
         <div className="w-full max-w-[1920px] mx-auto px-6 md:px-12 py-8 md:py-12">
-            <div className="mb-12">
-                <div className="w-12 h-12 flex items-center justify-center text-4xl grayscale hover:grayscale-0 transition-all cursor-default mb-2">
-                    💰
+            <div className="mb-12 flex items-end justify-between">
+                <div>
+                    <div className="w-12 h-12 flex items-center justify-center text-4xl grayscale hover:grayscale-0 transition-all cursor-default mb-2">
+                        🏦
+                    </div>
+                    <h1 className="text-4xl font-bold tracking-tight mb-2">Professional Finance</h1>
+                    <p className="text-text-secondary text-sm">Unified ledger and cash flow management.</p>
                 </div>
-                <h1 className="text-4xl font-bold tracking-tight mb-2">Expenses</h1>
-                <p className="text-text-secondary text-sm">Financial health and spending habits.</p>
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={handleDownloadCSV}
+                        className="p-2.5 rounded-xl bg-surface hover:bg-hover border border-border-subtle text-text-secondary transition-all flex items-center gap-2 text-xs font-bold"
+                    >
+                        <Download size={14} /> Export CSV
+                    </button>
+                    <div className="text-right border-l border-border-subtle pl-4">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">Total Liquidity</p>
+                        <p className="text-4xl font-bold text-primary tabular-nums">₦{net_worth.toLocaleString()}</p>
+                    </div>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-16">
-                <div className="notion-card p-6 border-l-4 border-l-primary flex flex-col justify-between">
-                    <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">Spent Today</p>
-                        <p className="text-3xl font-bold text-text-primary tabular-nums">₦{dailyTotal.toLocaleString()}</p>
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-16">
+                <div className="notion-card p-6 border-l-4 border-l-primary group">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">This Week (Spent)</p>
+                    <p className="text-3xl font-bold text-text-primary tabular-nums">₦{this_week.expense.toLocaleString()}</p>
+                    <div className="mt-4 flex items-center gap-2">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${expenseChange > 0 ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                            {expenseChange > 0 ? '↑' : '↓'} {Math.abs(expenseChange).toFixed(1)}% vs last week
+                        </span>
+                    </div>
+                </div>
+
+                <div className="notion-card p-6 border-l-4 border-l-emerald-500">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">This Week (Income)</p>
+                    <p className="text-3xl font-bold text-text-primary tabular-nums">₦{this_week.income.toLocaleString()}</p>
+                    <p className="mt-4 text-[10px] text-text-secondary font-bold uppercase tracking-widest">
+                        Net: <span className={this_week.income >= this_week.expense ? 'text-emerald-500' : 'text-red-500'}>
+                            ₦{(this_week.income - this_week.expense).toLocaleString()}
+                        </span>
+                    </p>
+                </div>
+
+                <div className="notion-card p-6 border-l-4 border-l-text-secondary/30">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">Last Week (Spent)</p>
+                    <div className="flex items-end justify-between">
+                        <p className="text-3xl font-bold text-text-primary/60 tabular-nums">₦{last_week.expense.toLocaleString()}</p>
+                        <TrendingUp size={20} className="text-text-secondary/20" />
                     </div>
                 </div>
 
                 <div className="notion-card p-6 border-l-4 border-l-accent flex flex-col justify-between">
                     <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">Spent This Week</p>
-                        <p className="text-3xl font-bold text-text-primary tabular-nums">₦{weeklyTotal.toLocaleString()}</p>
-                    </div>
-                </div>
-
-                <div className="notion-card p-6 border-l-4 border-l-text-secondary flex flex-col justify-between">
-                    <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">Spent (30 Days)</p>
-                        <p className="text-3xl font-bold text-text-primary tabular-nums">₦{monthlyTotal.toLocaleString()}</p>
-                    </div>
-                </div>
-
-                <div className="notion-card p-6 border-l-4 border-l-emerald-500 flex flex-col justify-between">
-                    <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">Total Monthly Budget</p>
-                        <p className="text-3xl font-bold text-text-primary tabular-nums">₦{Object.values(budgetMap).reduce((a, b) => a + b, 0).toLocaleString()}</p>
-                    </div>
-                    <div className="mt-4 flex items-center gap-1 text-[10px] text-text-secondary font-bold uppercase tracking-widest">
-                        <span className={monthlyTotal > Object.values(budgetMap).reduce((a, b) => a + b, 0) ? "text-red-500" : "text-emerald-500"}>
-                            {((monthlyTotal / (Object.values(budgetMap).reduce((a, b) => a + b, 0) || 1)) * 100).toFixed(1)}% Used
-                        </span>
-                    </div>
-                </div>
-
-                <div className="md:col-span-4 notion-card p-6 flex flex-col justify-center">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-6">Spending by Category (30 Days)</h3>
-                    {chartData.length > 0 ? (
-                        <div className="h-48 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={chartData} layout="vertical" margin={{ left: -20, right: 20 }}>
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
-                                    <XAxis type="number" hide />
-                                    <YAxis dataKey="name" type="category" stroke={axisColor} fontSize={10} width={80} />
-                                    <Tooltip
-                                        cursor={{ fill: gridColor }}
-                                        contentStyle={{ backgroundColor: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: '4px', color: theme === 'dark' ? '#fff' : '#000' }}
-                                        itemStyle={{ color: theme === 'dark' ? '#D3D3D3' : '#333', fontSize: '12px' }}
-                                    />
-                                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                                        {chartData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color} />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">Active Accounts</p>
+                        <div className="flex -space-x-2 mt-2">
+                            {accounts.map(acc => (
+                                <div key={acc.id} className="w-8 h-8 rounded-full bg-surface border-2 border-background flex items-center justify-center text-xs shadow-sm" title={acc.name}>
+                                    {acc.type === 'CASH' ? '💵' : acc.type === 'SAVINGS' ? '🏦' : '💳'}
+                                </div>
+                            ))}
                         </div>
-                    ) : (
-                        <div className="h-48 flex items-center justify-center text-sm text-text-secondary italic">
-                            Not enough data for visualization.
-                        </div>
-                    )}
+                    </div>
+                    <button className="mt-4 text-[10px] font-bold uppercase tracking-widest text-primary hover:underline text-left">
+                        Manage Accounts →
+                    </button>
                 </div>
             </div>
 
-            <section className="space-y-8">
-                <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-text-secondary/60 flex items-center gap-2">
-                    <span>Breakdown</span>
-                    <div className="h-px flex-1 bg-border-subtle" />
-                </h2>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Visual Analytics */}
+                <div className="lg:col-span-8 space-y-8">
+                    <div className="notion-card p-8">
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-8">Category Allocation (30 Days)</h3>
+                        {chartData.length > 0 ? (
+                            <div className="h-64 w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={chartData} layout="vertical" margin={{ left: -20, right: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
+                                        <XAxis type="number" hide />
+                                        <YAxis dataKey="name" type="category" stroke={axisColor} fontSize={10} width={80} />
+                                        <Tooltip
+                                            cursor={{ fill: gridColor }}
+                                            contentStyle={{ backgroundColor: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: '4px' }}
+                                        />
+                                        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                                            {chartData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        ) : (
+                            <div className="h-64 flex items-center justify-center text-sm text-text-secondary italic">
+                                No spending records found for categories.
+                            </div>
+                        )}
+                    </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {CATEGORIES.map(cat => {
-                        const spent = summary[cat.value] || 0;
-                        const budget = budgetMap[cat.value] || 0;
-                        const percentage = Math.min(100, (spent / budget) * 100);
-                        const isOver = spent > budget;
+                    <div className="notion-card p-8">
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-8 flex items-center justify-between">
+                            <span>Recent Activity</span>
+                            <Link to="/journal" className="text-[10px] text-primary hover:underline">View Ledger →</Link>
+                        </h3>
+                        <div className="space-y-1">
+                            <TransactionHistory today={format(today, 'yyyy-MM-dd')} />
+                        </div>
+                    </div>
+                </div>
 
-                        return (
-                            <div key={cat.value} className="notion-card p-4 group">
-                                <div className="flex items-center justify-between mb-3">
+                {/* Account Balances Sidebar */}
+                <div className="lg:col-span-4 space-y-6">
+                    <section className="bg-surface/30 p-8 rounded-3xl border border-border-subtle backdrop-blur-md">
+                        <h2 className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-6 flex items-center justify-between">
+                            <span>Accounts</span>
+                            <Plus size={14} className="cursor-pointer hover:text-primary transition-colors" />
+                        </h2>
+                        <div className="space-y-4">
+                            {accounts.map(acc => (
+                                <div key={acc.id} className="flex items-center justify-between p-4 rounded-xl bg-surface/50 border border-transparent hover:border-primary/20 transition-all group">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
-                                            {cat.value === 'Food' && '🍴'}
-                                            {cat.value === 'Transport' && '🚗'}
-                                            {cat.value === 'Home' && '🏠'}
-                                            {cat.value === 'Lifestyle' && '🎭'}
-                                            {cat.value === 'Bills' && '💳'}
-                                            {cat.value === 'Shopping' && '📦'}
-                                            {cat.value === 'Misc' && '✨'}
+                                        <div className="w-10 h-10 rounded-lg bg-background flex items-center justify-center text-lg shadow-inner">
+                                            {acc.type === 'CASH' ? '💵' : acc.type === 'SAVINGS' ? '🏦' : '💳'}
                                         </div>
                                         <div>
-                                            <p className="text-sm font-semibold">{cat.label}</p>
-                                            <div className="flex items-center gap-1 group/input">
-                                                <span className="text-[10px] text-text-secondary uppercase font-bold tracking-widest">
-                                                    Target ₦
-                                                </span>
-                                                <input
-                                                    type="number"
-                                                    defaultValue={budget}
-                                                    onBlur={(e) => {
-                                                        const newVal = parseFloat(e.target.value);
-                                                        if (newVal !== budget) {
-                                                            updateBudget.mutate({ category: cat.value, amount: newVal });
-                                                        }
-                                                    }}
-                                                    className="w-16 bg-transparent border-none text-[10px] font-bold text-text-secondary outline-none focus:text-text-primary focus:bg-hover px-1 rounded transition-colors"
-                                                />
-                                            </div>
+                                            <p className="text-sm font-bold text-text-primary">{acc.name}</p>
+                                            <p className="text-[10px] text-text-secondary uppercase font-bold tracking-widest">{acc.type}</p>
                                         </div>
                                     </div>
-                                    <p className={`text-lg font-bold tabular-nums ${isOver ? 'text-accent' : 'text-text-primary'}`}>
-                                        ₦{spent.toFixed(2)}
-                                    </p>
+                                    <p className="font-bold tabular-nums">₦{acc.balance.toLocaleString()}</p>
                                 </div>
-                                <div className="w-full h-1 bg-border-subtle rounded-full overflow-hidden">
-                                    <div
-                                        className={`h-full transition-all duration-500 ${isOver ? 'bg-accent' : 'bg-primary'}`}
-                                        style={{ width: `${percentage}%` }}
-                                    />
-                                </div>
-                            </div>
-                        );
-                    })}
+                            ))}
+                        </div>
+                    </section>
+
+                    <section className="notion-card p-8 bg-gradient-to-br from-primary/5 to-transparent">
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-4 flex items-center gap-2">
+                            <Info size={14} /> Financial Tip
+                        </h3>
+                        <p className="text-xs text-text-secondary leading-relaxed">
+                            Your savings increased by <span className="text-emerald-500 font-bold">₦{this_week.income.toLocaleString()}</span> this week. Keeping 3-6 months of expenses in your "Savings" account is a professional benchmark.
+                        </p>
+                    </section>
                 </div>
-            </section>
-        </div >
+            </div>
+        </div>
     );
 }

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Annotated
 from . import models, schemas, auth, database
-from .routers import habits, projects, daily_notes, expenses, search, budgets, todos, learning, workouts, user_data, ai
+from .routers import habits, projects, daily_notes, finance, search, budgets, todos, learning, workouts, user_data, ai
 from datetime import timedelta
 from jose import JWTError, jwt
 
@@ -15,9 +15,60 @@ app = FastAPI(title="Atlas API")
 
 @app.on_event("startup")
 async def startup():
-    # Create tables if they don't exist (for V1 simplicity)
+    # Create tables if they don't exist
     async with database.engine.begin() as conn:
         await conn.run_sync(models.Base.metadata.create_all)
+    
+    # Simple migration logic for V1 -> V2 Professional Finance
+    async with database.SessionLocal() as db:
+        # Check if we need to migrate from 'expenses' table
+        # Since 'expenses' table might still exist in DB but not in models, 
+        # we can use raw SQL to check and migrate.
+        from sqlalchemy import text
+        try:
+            # Check if old expenses table has records
+            res = await db.execute(text("SELECT count(*) FROM expenses"))
+            count = res.scalar()
+            
+            if count > 0:
+                print(f"📦 Found {count} legacy expenses. Migrating to Professional Finance...")
+                
+                # 1. Get all unique users
+                user_res = await db.execute(select(models.User))
+                users = user_res.scalars().all()
+                
+                for user in users:
+                    # 2. Ensure each user has at least one account
+                    acc_res = await db.execute(select(models.Account).where(models.Account.user_id == user.id))
+                    if not acc_res.scalar_one_or_none():
+                        cash_account = models.Account(user_id=user.id, name="Cash", type="CASH", balance=0.0)
+                        db.add(cash_account)
+                        await db.flush()
+                        
+                        # 3. Migrate expenses for this user
+                        exp_res = await db.execute(text(f"SELECT amount, category, description, date FROM expenses WHERE user_id = '{user.id}'"))
+                        for row in exp_res.all():
+                            tx = models.Transaction(
+                                user_id=user.id,
+                                account_id=cash_account.id,
+                                amount=row[0],
+                                category=row[1],
+                                description=row[2],
+                                date=row[3],
+                                type="EXPENSE"
+                            )
+                            db.add(tx)
+                            cash_account.balance -= row[0]
+                
+                await db.commit()
+                # Optionally: Drop the old table or clear it
+                await db.execute(text("DELETE FROM expenses"))
+                await db.commit()
+                print("✅ Migration complete.")
+        except Exception as e:
+            # Table might not exist yet, which is fine
+            pass
+
     print("Database tables initialized.")
 
 app.add_middleware(
@@ -51,7 +102,7 @@ async def register(user_in: schemas.UserCreate, db: AsyncSession = Depends(datab
 app.include_router(habits.router)
 app.include_router(projects.router)
 app.include_router(daily_notes.router)
-app.include_router(expenses.router)
+app.include_router(finance.router)
 app.include_router(search.router)
 app.include_router(budgets.router)
 app.include_router(todos.router)

@@ -131,20 +131,65 @@ class DailyNote(DailyNoteBase):
     class Config:
         from_attributes = True
 
-# Expense Schemas
-class ExpenseBase(BaseModel):
-    date: date
-    amount: float
-    category: str
-    description: str
+# Account Schemas
+class AccountBase(BaseModel):
+    name: str = Field(..., max_length=100)
+    type: str = "BANK" # BANK, CASH, CARD, SAVINGS, WALLET
+    balance: float = 0.0
     currency: str = "NGN"
+    is_default: bool = False
 
-class ExpenseCreate(ExpenseBase):
+class AccountCreate(AccountBase):
     pass
 
-class Expense(ExpenseBase):
+class Account(AccountBase):
     id: UUID
     user_id: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Transaction Schemas
+class TransactionBase(BaseModel):
+    date: date
+    amount: float
+    type: str = "EXPENSE" # INCOME, EXPENSE, TRANSFER
+    category: str
+    description: str
+    account_id: UUID
+    to_account_id: Optional[UUID] = None
+    currency: str = "NGN"
+
+class TransactionCreate(TransactionBase):
+    pass
+
+class Transaction(TransactionBase):
+    id: UUID
+    user_id: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Recurring Transaction Schemas
+class RecurringTransactionBase(BaseModel):
+    amount: float
+    type: str
+    category: str
+    description: str
+    account_id: UUID
+    frequency: str
+    next_date: date
+    is_active: bool = True
+
+class RecurringTransactionCreate(RecurringTransactionBase):
+    pass
+
+class RecurringTransaction(RecurringTransactionBase):
+    id: UUID
+    user_id: UUID
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -153,6 +198,7 @@ class Expense(ExpenseBase):
 class BudgetBase(BaseModel):
     category: str = Field(..., max_length=50)
     amount: float
+    period: str = "MONTHLY"
 
 class BudgetCreate(BudgetBase):
     pass
