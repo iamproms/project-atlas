@@ -19,54 +19,53 @@ async def startup():
     async with database.engine.begin() as conn:
         await conn.run_sync(models.Base.metadata.create_all)
     
-    # Simple migration logic for V1 -> V2 Professional Finance
+    # Professional Finance & User Normalization Migration
     async with database.SessionLocal() as db:
-        # Check if we need to migrate from 'expenses' table
-        # Since 'expenses' table might still exist in DB but not in models, 
-        # we can use raw SQL to check and migrate.
+        print("🔍 Starting database normalization and migration...")
+        
+        # 1. Normalize ALL user identifiers (email/username)
+        try:
+            users_res = await db.execute(select(models.User))
+            users = users_res.scalars().all()
+            for user in users:
+                modified = False
+                if user.email and user.email != user.email.lower().strip():
+                    user.email = user.email.lower().strip()
+                    modified = True
+                if user.username and user.username != user.username.lower().strip():
+                    user.username = user.username.lower().strip()
+                    modified = True
+                if modified:
+                    db.add(user)
+            await db.commit()
+            print(f"✅ User normalization complete ({len(users)} users checked).")
+        except Exception as e:
+            await db.rollback()
+            print(f"⚠️ User normalization skipped or failed: {e}")
+
+        # 2. Legacy Expense Migration (V1 -> V2)
         from sqlalchemy import text
         try:
-            # Check if old expenses table has records
             res = await db.execute(text("SELECT count(*) FROM expenses"))
-            count = res.scalar()
-            
-            if count > 0:
-                print(f"📦 Found {count} legacy expenses. Migrating to Professional Finance...")
-                
-                # 1. Get all unique users
-                user_res = await db.execute(select(models.User))
-                users = user_res.scalars().all()
-                
-                for user in users:
-                    # 2. Ensure each user has at least one account
+            if res.scalar() > 0:
+                print(f"📦 Migrating legacy expenses...")
+                users_res = await db.execute(select(models.User))
+                for user in users_res.scalars().all():
                     acc_res = await db.execute(select(models.Account).where(models.Account.user_id == user.id))
                     if not acc_res.scalar_one_or_none():
                         cash_account = models.Account(user_id=user.id, name="Cash", type="CASH", balance=0.0)
                         db.add(cash_account)
                         await db.flush()
-                        
-                        # 3. Migrate expenses for this user
                         exp_res = await db.execute(text(f"SELECT amount, category, description, date FROM expenses WHERE user_id = '{user.id}'"))
                         for row in exp_res.all():
-                            tx = models.Transaction(
-                                user_id=user.id,
-                                account_id=cash_account.id,
-                                amount=row[0],
-                                category=row[1],
-                                description=row[2],
-                                date=row[3],
-                                type="EXPENSE"
-                            )
+                            tx = models.Transaction(user_id=user.id, account_id=cash_account.id, amount=row[0], category=row[1], description=row[2], date=row[3], type="EXPENSE")
                             db.add(tx)
                             cash_account.balance -= row[0]
-                
                 await db.commit()
-                # Optionally: Drop the old table or clear it
                 await db.execute(text("DELETE FROM expenses"))
                 await db.commit()
-                print("✅ Migration complete.")
-        except Exception as e:
-            # Table might not exist yet, which is fine
+                print("✅ Expense migration complete.")
+        except Exception:
             pass
 
     print("Database tables initialized.")
@@ -83,7 +82,8 @@ app.add_middleware(
 async def register(user_in: schemas.UserCreate, db: AsyncSession = Depends(database.get_db)):
     # Normalize email to lowercase
     email_lower = user_in.email.lower().strip()
-    result = await db.execute(select(models.User).where(models.User.email == email_lower))
+    from sqlalchemy import func
+    result = await db.execute(select(models.User).where(func.lower(models.User.email) == email_lower))
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -119,7 +119,7 @@ async def login(
     password: str = Form(...),
     db: AsyncSession = Depends(database.get_db)
 ):
-    from sqlalchemy import or_
+    from sqlalchemy import or_, func
     
     # Check if 'username' is an email (contains @) or a username
     identifier = username.lower().strip()
@@ -127,8 +127,8 @@ async def login(
     result = await db.execute(
         select(models.User).where(
             or_(
-                models.User.email == identifier,
-                models.User.username == identifier
+                func.lower(models.User.email) == identifier,
+                func.lower(models.User.username) == identifier
             )
         )
     )
@@ -196,7 +196,9 @@ async def forgot_password(
     request: schemas.ForgotPasswordRequest,
     db: AsyncSession = Depends(database.get_db)
 ):
-    result = await db.execute(select(models.User).where(models.User.email == request.email))
+    from sqlalchemy import func
+    email_lower = request.email.lower().strip()
+    result = await db.execute(select(models.User).where(func.lower(models.User.email) == email_lower))
     user = result.scalar_one_or_none()
     
     if not user:
