@@ -81,7 +81,9 @@ app.add_middleware(
 
 @app.post("/auth/register", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
 async def register(user_in: schemas.UserCreate, db: AsyncSession = Depends(database.get_db)):
-    result = await db.execute(select(models.User).where(models.User.email == user_in.email))
+    # Normalize email to lowercase
+    email_lower = user_in.email.lower().strip()
+    result = await db.execute(select(models.User).where(models.User.email == email_lower))
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -90,7 +92,7 @@ async def register(user_in: schemas.UserCreate, db: AsyncSession = Depends(datab
     
     hashed_password = auth.get_password_hash(user_in.password)
     db_user = models.User(
-        email=user_in.email,
+        email=email_lower,
         hashed_password=hashed_password,
         full_name=user_in.full_name
     )
@@ -113,11 +115,23 @@ app.include_router(ai.router)
 
 @app.post("/auth/login", response_model=schemas.Token)
 async def login(
-    username: str = Form(...),
+    username: str = Form(...), # This 'username' field from OAuth2 form will hold either email or username
     password: str = Form(...),
     db: AsyncSession = Depends(database.get_db)
 ):
-    result = await db.execute(select(models.User).where(models.User.email == username))
+    from sqlalchemy import or_
+    
+    # Check if 'username' is an email (contains @) or a username
+    identifier = username.lower().strip()
+    
+    result = await db.execute(
+        select(models.User).where(
+            or_(
+                models.User.email == identifier,
+                models.User.username == identifier
+            )
+        )
+    )
     user = result.scalar_one_or_none()
     
     if not user or not auth.verify_password(password, user.hashed_password):
