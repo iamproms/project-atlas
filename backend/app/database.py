@@ -18,6 +18,14 @@ else:
 DEFAULT_DB = f"sqlite+aiosqlite:///{DATA_DIR}/atlas.db"
 DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DB)
 
+# Fix Railway's "postgres://" prefix if present and convert to asyncpg
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+elif DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+print(f"📡 Connecting to database: {DATABASE_URL.split('@')[-1]}") # Log without credentials
+
 engine = create_async_engine(
     DATABASE_URL, 
     echo=True,
