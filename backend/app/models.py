@@ -21,8 +21,8 @@ class User(Base):
     habit_logs: Mapped[List["HabitLog"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     project_focuses: Mapped[List["ProjectFocus"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     accounts: Mapped[List["Account"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
-    ledger_entries: Mapped[List["LedgerEntry"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
-    categories: Mapped[List["FinancialCategory"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
+    expenses: Mapped[List["Expense"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
+    transactions: Mapped[List["Transaction"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     budgets: Mapped[List["Budget"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     todos: Mapped[List["Todo"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     learning_sessions: Mapped[List["LearningSession"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
@@ -119,49 +119,39 @@ class FinancialCategory(Base):
     owner: Mapped["User"] = relationship(back_populates="categories")
     ledger_entries: Mapped[List["LedgerEntry"]] = relationship(back_populates="category")
 
-class Account(Base):
-    __tablename__ = "accounts"
+class Expense(Base):
+    __tablename__ = "expenses"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
-    name: Mapped[str] = mapped_column(String(100))
-    type: Mapped[str] = mapped_column(String(50)) # BANK, CASH, CARD, SAVINGS, WALLET
-    balance_cents: Mapped[int] = mapped_column(BigInteger, default=0)
-    currency: Mapped[str] = mapped_column(String(3), default="NGN")
-    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    amount: Mapped[float] = mapped_column(Float)
+    category: Mapped[str] = mapped_column(String(50))
+    description: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    owner: Mapped["User"] = relationship(back_populates="accounts")
-    ledger_entries: Mapped[List["LedgerEntry"]] = relationship(
-        back_populates="account", 
-        foreign_keys="[LedgerEntry.account_id]",
-        cascade="all, delete-orphan"
-    )
+    owner: Mapped["User"] = relationship(back_populates="expenses")
 
-class LedgerEntry(Base):
-    __tablename__ = "ledger_entries"
+class Transaction(Base):
+    __tablename__ = "transactions"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
     account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("accounts.id"), index=True)
-    to_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("accounts.id"), nullable=True)
-    category_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("financial_categories.id"), nullable=True)
+    to_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("accounts.id"), nullable=True) # For transfers
     
     date: Mapped[date] = mapped_column(Date, index=True)
-    amount_cents: Mapped[int] = mapped_column(BigInteger)
-    type: Mapped[str] = mapped_column(String(20)) # INCOME, EXPENSE, TRANSFER
+    amount: Mapped[float] = mapped_column(Float)
+    type: Mapped[str] = mapped_column(String(20), default="EXPENSE") # INCOME, EXPENSE, TRANSFER
+    category: Mapped[str] = mapped_column(String(50), index=True)
     description: Mapped[str] = mapped_column(String(255))
     currency: Mapped[str] = mapped_column(String(3), default="NGN")
     is_recurring: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    owner: Mapped["User"] = relationship(back_populates="ledger_entries")
-    account: Mapped["Account"] = relationship(back_populates="ledger_entries", foreign_keys=[account_id])
+    owner: Mapped["User"] = relationship(back_populates="transactions")
+    account: Mapped["Account"] = relationship(back_populates="transactions", foreign_keys=[account_id])
     to_account: Mapped[Optional["Account"]] = relationship(foreign_keys=[to_account_id])
-    category: Mapped[Optional["FinancialCategory"]] = relationship(back_populates="ledger_entries")
 
 class RecurringTransaction(Base):
     __tablename__ = "recurring_transactions"

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Annotated
 from . import models, schemas, auth, database
-from .routers import habits, projects, daily_notes, finance, search, budgets, todos, learning, workouts, user_data, ai
+from .routers import habits, projects, daily_notes, expenses, finance, search, budgets, todos, learning, workouts, user_data, ai
 from datetime import timedelta
 from jose import JWTError, jwt
 
@@ -43,49 +43,47 @@ async def startup():
             await db.rollback()
             print(f"⚠️ User normalization skipped or failed: {e}")
 
-        # 2. Professional Finance Migration (V2 -> V3)
-        # Migrate Transaction -> LedgerEntry and convert Float -> Cent Integer
+        # 2. Rollback Migration (V3 -> V2 "Simple")
         try:
             from sqlalchemy import text
-            # Check if old transactions table exists and has data
-            res = await db.execute(text("SELECT count(*) FROM transactions"))
+            res = await db.execute(text("SELECT count(*) FROM ledger_entries"))
             if res.scalar() > 0:
-                print("📦 Migrating transactions to professional LedgerEntry (cents)...")
-                # 1. Ensure categories exist for users
-                users_res = await db.execute(select(models.User))
-                users = users_res.scalars().all()
+                print("📦 Rolling back professional LedgerEntry to simple Expense/Transaction...")
                 
-                # Fetch/Create default category for migration
-                # (Ideally we'd map them, but for safety we use descriptions and names)
-                
-                # 2. Migrate entries
-                tx_res = await db.execute(text("SELECT id, user_id, account_id, to_account_id, date, amount, type, category, description, currency, created_at FROM transactions"))
-                for row in tx_res.all():
-                    # amount cents
-                    amt_cents = int(round(row[5] * 100))
+                # Fetch entries
+                ledger_res = await db.execute(text("SELECT user_id, amount_cents, type, description, date, account_id, to_account_id FROM ledger_entries"))
+                for row in ledger_res.all():
+                    user_id, amt_cents, e_type, desc, e_date, acc_id, to_acc_id = row
+                    amount = float(amt_cents) / 100.0
                     
-                    # Create LedgerEntry
-                    entry = models.LedgerEntry(
-                        id=row[0], user_id=row[1], account_id=row[2], to_account_id=row[3],
-                        date=row[4], amount_cents=amt_cents, type=row[6],
-                        description=f"[{row[7]}] {row[8]}", # Preserve old category in description if not mapped
-                        currency=row[9], created_at=row[10]
+                    if e_type == "EXPENSE":
+                        # Add to expenses table
+                        db_exp = models.Expense(
+                            user_id=user_id, amount=amount, date=e_date, 
+                            description=desc, category="Misc" # Defaulting back to simple string
+                        )
+                        db.add(db_exp)
+                    
+                    # Also keep simple transaction history if accounts exist
+                    db_tx = models.Transaction(
+                        user_id=user_id, account_id=acc_id, to_account_id=to_acc_id,
+                        amount=amount, type=e_type, description=desc, date=e_date,
+                        category="Misc"
                     )
-                    db.add(entry)
+                    db.add(db_tx)
                 
-                # 3. Update Account Balances
-                acc_res = await db.execute(text("SELECT id, balance FROM accounts"))
+                # Update Account Balances back to Float
+                acc_res = await db.execute(text("SELECT id, balance_cents FROM accounts"))
                 for acc_row in acc_res.all():
-                    bal_cents = int(round(acc_row[1] * 100))
-                    await db.execute(text(f"UPDATE accounts SET balance_cents = {bal_cents} WHERE id = '{acc_row[0]}'"))
+                    bal = float(acc_row[1]) / 100.0
+                    await db.execute(text(f"UPDATE accounts SET balance = {bal} WHERE id = '{acc_row[0]}'"))
                 
                 await db.commit()
-                # 4. Clear/Drop old table if desired (or just empty it)
-                await db.execute(text("DELETE FROM transactions"))
-                await db.commit()
-                print("✅ Professional finance migration complete.")
+                # await db.execute(text("DELETE FROM ledger_entries")) # Keep for safety during migration
+                # await db.commit()
+                print("✅ Rollback migration complete.")
         except Exception as e:
-            print(f"ℹ️ Migration skipped or table 'transactions' not found: {e}")
+            print(f"ℹ️ Rollback skipped or table 'ledger_entries' not found: {e}")
 
     print("Database tables initialized.")
 
@@ -123,7 +121,7 @@ async def register(user_in: schemas.UserCreate, db: AsyncSession = Depends(datab
 app.include_router(habits.router)
 app.include_router(projects.router)
 app.include_router(daily_notes.router)
-app.include_router(finance.router)
+app.include_router(expenses.router)
 app.include_router(search.router)
 app.include_router(budgets.router)
 app.include_router(todos.router)

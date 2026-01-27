@@ -21,13 +21,13 @@ async def search(
     notes_result = await db.execute(notes_stmt)
     notes = notes_result.scalars().all()
 
-    # Search Ledger Entries
-    ledger_stmt = select(models.LedgerEntry).where(
-        models.LedgerEntry.user_id == current_user.id,
-        models.LedgerEntry.description.ilike(f"%{q}%")
+    # Search Expenses
+    expenses_stmt = select(models.Expense).where(
+        models.Expense.user_id == current_user.id,
+        models.Expense.description.ilike(f"%{q}%")
     )
-    ledger_result = await db.execute(ledger_stmt)
-    ledger_entries = ledger_result.scalars().all()
+    expenses_result = await db.execute(expenses_stmt)
+    expenses = expenses_result.scalars().all()
 
     # Search Projects
     projects_stmt = select(models.Project).where(
@@ -42,6 +42,6 @@ async def search(
 
     return {
         "notes": notes,
-        "ledger": ledger_entries,
+        "expenses": expenses,
         "projects": projects
     }

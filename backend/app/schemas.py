@@ -131,17 +131,17 @@ class DailyNote(DailyNoteBase):
     class Config:
         from_attributes = True
 
-# Financial Category Schemas
-class FinancialCategoryBase(BaseModel):
-    name: str = Field(..., max_length=100)
-    type: str = "EXPENSE" # INCOME, EXPENSE
-    icon: Optional[str] = None
-    is_active: bool = True
+# Expense Schemas
+class ExpenseBase(BaseModel):
+    date: date
+    amount: float
+    category: str
+    description: str
 
-class FinancialCategoryCreate(FinancialCategoryBase):
+class ExpenseCreate(ExpenseBase):
     pass
 
-class FinancialCategory(FinancialCategoryBase):
+class Expense(ExpenseBase):
     id: UUID
     user_id: UUID
     created_at: datetime
@@ -153,10 +153,9 @@ class FinancialCategory(FinancialCategoryBase):
 class AccountBase(BaseModel):
     name: str = Field(..., max_length=100)
     type: str = "BANK" # BANK, CASH, CARD, SAVINGS, WALLET
-    balance_cents: int = 0
+    balance: float = 0.0
     currency: str = "NGN"
     is_default: bool = False
-    is_active: bool = True
 
 class AccountCreate(AccountBase):
     pass
@@ -169,34 +168,31 @@ class Account(AccountBase):
     class Config:
         from_attributes = True
 
-# Ledger Entry Schemas
-class LedgerEntryBase(BaseModel):
+# Transaction Schemas
+class TransactionBase(BaseModel):
     date: date
-    amount_cents: int
+    amount: float
     type: str = "EXPENSE" # INCOME, EXPENSE, TRANSFER
+    category: str
     description: str
     account_id: UUID
     to_account_id: Optional[UUID] = None
-    category_id: Optional[UUID] = None
     currency: str = "NGN"
-    is_recurring: bool = False
 
-class LedgerEntryCreate(LedgerEntryBase):
+class TransactionCreate(TransactionBase):
     pass
 
-class LedgerEntry(LedgerEntryBase):
+class Transaction(TransactionBase):
     id: UUID
     user_id: UUID
     created_at: datetime
-    updated_at: datetime
-    deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
 # Recurring Transaction Schemas
 class RecurringTransactionBase(BaseModel):
-    amount_cents: int
+    amount: float
     type: str
     category: str
     description: str
@@ -219,7 +215,7 @@ class RecurringTransaction(RecurringTransactionBase):
 # Budget Schemas
 class BudgetBase(BaseModel):
     category: str = Field(..., max_length=50)
-    amount_cents: int
+    amount: float
     period: str = "MONTHLY"
 
 class BudgetCreate(BudgetBase):

@@ -31,7 +31,7 @@ export default function CommandPalette() {
     const { logout } = useAuth();
 
     // Fetch search results when query is long enough
-    const { data: results = { notes: [], ledger: [], projects: [] }, isFetching } = useQuery({
+    const { data: results = { notes: [], expenses: [], projects: [] }, isFetching } = useQuery({
         queryKey: ['global-search', query],
         queryFn: () => api.get('/search', { params: { q: query } }).then(res => res.data),
         enabled: query.length > 2,
@@ -205,22 +205,22 @@ export default function CommandPalette() {
                                 </div>
                             )}
 
-                            {results.ledger.length > 0 && (
+                            {results.expenses.length > 0 && (
                                 <div>
-                                    <p className="px-2 py-1 text-[10px] uppercase font-bold text-text-secondary tracking-widest mb-1">Financial Ledger</p>
-                                    {results.ledger.map(entry => (
+                                    <p className="px-2 py-1 text-[10px] uppercase font-bold text-text-secondary tracking-widest mb-1">Expenses</p>
+                                    {results.expenses.map(exp => (
                                         <button
-                                            key={entry.id}
+                                            key={exp.id}
                                             onClick={() => { navigate('/expenses'); setIsOpen(false); }}
                                             className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-hover group transition-colors"
                                         >
                                             <div className="flex flex-col text-left">
-                                                <span className="text-sm text-text-primary">{entry.description}</span>
+                                                <span className="text-sm text-text-primary">{exp.description}</span>
                                                 <span className="text-[10px] text-text-secondary uppercase font-bold flex items-center gap-1">
-                                                    <Calendar size={10} /> {entry.date} • {entry.type}
+                                                    <Calendar size={10} /> {exp.date} • {exp.category}
                                                 </span>
                                             </div>
-                                            <span className="text-sm font-bold text-text-primary tabular-nums">₦{(entry.amount_cents / 100).toFixed(2)}</span>
+                                            <span className="text-sm font-bold text-text-primary tabular-nums">₦{exp.amount.toFixed(2)}</span>
                                         </button>
                                     ))}
                                 </div>
@@ -247,7 +247,7 @@ export default function CommandPalette() {
                                 </div>
                             )}
 
-                            {results.notes.length === 0 && results.ledger.length === 0 && results.projects.length === 0 && (
+                            {results.notes.length === 0 && results.expenses.length === 0 && results.projects.length === 0 && (
                                 <div className="p-8 text-center">
                                     <Search className="mx-auto text-text-secondary/20 mb-3" size={40} />
                                     <p className="text-sm text-text-secondary italic">No results found for "{query}"</p>
