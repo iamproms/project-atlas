@@ -4,12 +4,15 @@ import api from '../api/client';
 import { Plus, Trash2, CreditCard, Tag, Info } from 'lucide-react';
 
 const CATEGORIES = [
-    { label: 'Food & Dining', value: 'Food', icon: '🍴' },
+    { label: 'Food', value: 'Food', icon: '🍴' },
     { label: 'Transport', value: 'Transport', icon: '🚗' },
     { label: 'Home', value: 'Home', icon: '🏠' },
     { label: 'Lifestyle', value: 'Lifestyle', icon: '🎭' },
     { label: 'Bills', value: 'Bills', icon: '💳' },
     { label: 'Shopping', value: 'Shopping', icon: '📦' },
+    { label: 'Health', value: 'Health', icon: '🏥' },
+    { label: 'Education', value: 'Education', icon: '🎓' },
+    { label: 'Gift', value: 'Gift', icon: '🎁' },
     { label: 'Misc', value: 'Misc', icon: '✨' },
 ];
 
@@ -40,6 +43,8 @@ export default function ExpenseWidget({ dateStr }) {
         queryFn: () => api.get(`/finance/transactions/${dateStr}`).then(res => res.data)
     });
 
+    const [isSuccess, setIsSuccess] = useState(false);
+
     const createTransaction = useMutation({
         mutationFn: (newTx) => api.post('/finance/transactions', newTx),
         onSuccess: () => {
@@ -47,6 +52,8 @@ export default function ExpenseWidget({ dateStr }) {
             setAmount('');
             setDescription('');
             setIsAdding(false);
+            setIsSuccess(true);
+            setTimeout(() => setIsSuccess(false), 3000);
         }
     });
 
@@ -79,7 +86,7 @@ export default function ExpenseWidget({ dateStr }) {
                         onClick={() => setIsAdding(true)}
                         className="p-1 hover:bg-hover rounded transition-colors text-text-primary"
                     >
-                        <Plus size={14} />
+                        <Plus size={18} />
                     </button>
                 </div>
                 <span className={`tabular-nums font-bold ${dailyTotal >= 0 ? 'text-emerald-500' : 'text-accent'}`}>
@@ -110,12 +117,18 @@ export default function ExpenseWidget({ dateStr }) {
                     )}
                 </div>
 
+                {isSuccess && (
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-bold uppercase tracking-widest py-2 rounded-xl text-center animate-in fade-in zoom-in duration-300">
+                        Transaction Saved ✓
+                    </div>
+                )}
+
                 {!isAdding ? (
                     <button
                         onClick={() => setIsAdding(true)}
                         className="w-full py-2 flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary hover:bg-hover px-2 -mx-2 rounded transition-all italic"
                     >
-                        <Plus size={14} />
+                        <Plus size={18} />
                         <span>Log income or expense...</span>
                     </button>
                 ) : (
@@ -153,15 +166,17 @@ export default function ExpenseWidget({ dateStr }) {
                         </div>
 
                         {/* Category Selector (simplified) */}
-                        <div className="flex flex-wrap gap-1">
-                            {CATEGORIES.slice(0, 5).map(cat => (
+                        <div className="grid grid-cols-5 gap-2">
+                            {CATEGORIES.map(cat => (
                                 <button
                                     key={cat.value}
                                     type="button"
                                     onClick={() => setCategory(cat.value)}
-                                    className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-tighter transition-all border ${category === cat.value ? 'bg-primary/20 border-primary text-primary' : 'border-transparent text-text-secondary'}`}
+                                    title={cat.label}
+                                    className={`aspect-square flex flex-col items-center justify-center rounded-xl text-lg transition-all border-2 ${category === cat.value ? 'bg-primary/20 border-primary scale-110 shadow-lg' : 'bg-background/40 border-border-subtle hover:border-text-secondary/30 grayscale hover:grayscale-0'}`}
                                 >
-                                    {cat.icon}
+                                    <span>{cat.icon}</span>
+                                    <span className="text-[7px] uppercase font-bold mt-1 tracking-tighter">{cat.label}</span>
                                 </button>
                             ))}
                         </div>

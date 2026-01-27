@@ -78,6 +78,9 @@ const DEFAULT_BUDGETS = {
 export default function ExpensesPage() {
     const today = new Date();
     const queryClient = useQueryClient();
+    const [isAccModalOpen, setIsAccModalOpen] = useState(false);
+    const [newAccName, setNewAccName] = useState('');
+    const [newAccType, setNewAccType] = useState('BANK');
 
     // Accounts Query
     const { data: accounts = [] } = useQuery({
@@ -93,6 +96,14 @@ export default function ExpensesPage() {
 
     const createAccount = useMutation({
         mutationFn: (newAcc) => api.post('/finance/accounts', newAcc),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['finance', 'accounts'] });
+            setNewAccName('');
+        }
+    });
+
+    const deleteAccount = useMutation({
+        mutationFn: (id) => api.delete(`/finance/accounts/${id}`),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['finance', 'accounts'] })
     });
 
@@ -186,7 +197,10 @@ export default function ExpensesPage() {
                             ))}
                         </div>
                     </div>
-                    <button className="mt-4 text-[10px] font-bold uppercase tracking-widest text-primary hover:underline text-left">
+                    <button
+                        onClick={() => setIsAccModalOpen(true)}
+                        className="mt-4 text-[10px] font-bold uppercase tracking-widest text-primary hover:underline text-left"
+                    >
                         Manage Accounts →
                     </button>
                 </div>
@@ -223,10 +237,15 @@ export default function ExpensesPage() {
                         )}
                     </div>
 
-                    <div className="notion-card p-8">
+                    <div className="notion-card p-8" id="activity">
                         <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-8 flex items-center justify-between">
                             <span>Recent Activity</span>
-                            <Link to="/journal" className="text-[10px] text-primary hover:underline">View Ledger →</Link>
+                            <button
+                                onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
+                                className="text-[10px] text-primary hover:underline bg-transparent border-none cursor-pointer"
+                            >
+                                Jump to end ↓
+                            </button>
                         </h3>
                         <div className="space-y-1">
                             <TransactionHistory today={format(today, 'yyyy-MM-dd')} />
@@ -244,9 +263,9 @@ export default function ExpensesPage() {
                         <div className="space-y-4">
                             {accounts.map(acc => (
                                 <div key={acc.id} className="flex items-center justify-between p-4 rounded-xl bg-surface/50 border border-transparent hover:border-primary/20 transition-all group">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-lg bg-background flex items-center justify-center text-lg shadow-inner">
-                                            {acc.type === 'CASH' ? '💵' : acc.type === 'SAVINGS' ? '🏦' : '💳'}
+                                    <div className="flex items-center gap-3 font-semibold">
+                                        <div className="w-12 h-12 rounded-xl bg-background flex items-center justify-center text-2xl shadow-inner border border-border-subtle">
+                                            {acc.type === 'CASH' ? '💵' : acc.type === 'SAVINGS' ? '🏦' : acc.type === 'CARD' ? '💳' : '🏦'}
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold text-text-primary">{acc.name}</p>
@@ -269,6 +288,82 @@ export default function ExpensesPage() {
                     </section>
                 </div>
             </div>
+
+            {/* Account Management Modal */}
+            {isAccModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-left">
+                    <div className="bg-surface w-full max-w-md rounded-[2.5rem] border border-border-subtle shadow-2xl p-10 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between mb-10">
+                            <h2 className="text-2xl font-bold tracking-tight">Manage Accounts</h2>
+                            <button onClick={() => setIsAccModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-hover text-text-secondary hover:text-text-primary transition-all text-2xl">×</button>
+                        </div>
+
+                        <div className="space-y-8">
+                            <div className="space-y-4">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/60">Current Accounts</p>
+                                <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                    {accounts.map(acc => (
+                                        <div key={acc.id} className="flex items-center justify-between p-4 rounded-2xl bg-background/50 border border-border-subtle group hover:border-primary/20 transition-all">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-xl bg-surface flex items-center justify-center text-xl shadow-sm border border-border-subtle">
+                                                    {acc.type === 'CASH' ? '💵' : acc.type === 'SAVINGS' ? '🏦' : '💳'}
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold text-text-primary">{acc.name}</span>
+                                                    <span className="text-[9px] font-bold text-text-secondary uppercase tracking-widest">{acc.type}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-sm font-bold tabular-nums">₦{acc.balance.toLocaleString()}</span>
+                                                {!acc.is_default && (
+                                                    <button onClick={() => {
+                                                        if (window.confirm('Delete this account? (Must have no transactions)')) {
+                                                            deleteAccount.mutate(acc.id);
+                                                        }
+                                                    }} className="opacity-0 group-hover:opacity-100 transition-opacity text-text-secondary hover:text-accent p-1">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <form onSubmit={(e) => {
+                                e.preventDefault();
+                                if (!newAccName) return;
+                                createAccount.mutate({ name: newAccName, type: newAccType, balance: 0.0 });
+                            }} className="space-y-6 pt-6 border-t border-border-subtle">
+                                <div className="space-y-2">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/60">Connect New Account</p>
+                                    <input
+                                        className="w-full bg-background border border-border-subtle rounded-2xl px-5 py-4 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-inner"
+                                        placeholder="Account Name (e.g. Zenith Opay)"
+                                        value={newAccName}
+                                        onChange={(e) => setNewAccName(e.target.value)}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {['BANK', 'CASH', 'SAVINGS', 'CARD'].map(t => (
+                                        <button
+                                            key={t}
+                                            type="button"
+                                            onClick={() => setNewAccType(t)}
+                                            className={`py-3 rounded-xl text-[9px] font-bold border-2 transition-all shadow-sm ${newAccType === t ? 'bg-primary border-primary text-white scale-105 shadow-primary/20' : 'bg-surface border-border-subtle text-text-secondary hover:border-text-secondary/30'}`}
+                                        >
+                                            {t}
+                                        </button>
+                                    ))}
+                                </div>
+                                <button type="submit" className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-xs uppercase tracking-[0.2em] shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all mt-4">
+                                    Add Account
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

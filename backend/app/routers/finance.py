@@ -51,6 +51,32 @@ async def create_account(
     await db.refresh(db_account)
     return db_account
 
+@router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(
+    account_id: uuid.UUID,
+    db: AsyncSession = Depends(database.get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
+):
+    result = await db.execute(
+        select(models.Account).where(and_(models.Account.id == account_id, models.Account.user_id == current_user.id))
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    # Check if it has transactions
+    tx_check = await db.execute(select(models.Transaction).where(models.Transaction.account_id == account_id))
+    if tx_check.first():
+         raise HTTPException(status_code=400, detail="Cannot delete account with existing transactions. Delete transactions first.")
+
+    await db.delete(account)
+    await db.commit()
+    return None
+
+@router.get("/categories", response_model=List[str])
+async def get_categories():
+    return ["Food", "Transport", "Home", "Lifestyle", "Bills", "Shopping", "Misc", "Health", "Gift", "Education", "Travel"]
+
 # Transactions
 @router.post("/transactions", response_model=schemas.Transaction)
 async def create_transaction(
