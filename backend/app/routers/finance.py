@@ -2,32 +2,77 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, desc
 from typing import List, Annotated, Optional
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from .. import models, schemas, database
 from ..auth import get_current_user
 import uuid
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 
-# Accounts
+# --- Categories ---
+
+@router.get("/categories", response_model=List[schemas.FinancialCategory])
+async def get_categories(
+    db: AsyncSession = Depends(database.get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None,
+    type: Optional[str] = None
+):
+    stmt = select(models.FinancialCategory).where(
+        models.FinancialCategory.user_id == current_user.id,
+        models.FinancialCategory.is_active == True
+    )
+    if type:
+        stmt = stmt.where(models.FinancialCategory.type == type)
+    
+    result = await db.execute(stmt)
+    categories = result.scalars().all()
+    
+    # Defaults if none exist
+    if not categories and not type:
+        defaults = [
+            ("Food", "EXPENSE", "🍴"), ("Transport", "EXPENSE", "🚗"),
+            ("Home", "EXPENSE", "🏠"), ("Bills", "EXPENSE", "💳"),
+            ("Salary", "INCOME", "💰"), ("Freelance", "INCOME", "💻"),
+            ("Misc", "EXPENSE", "✨")
+        ]
+        for name, cat_type, icon in defaults:
+            db.add(models.FinancialCategory(user_id=current_user.id, name=name, type=cat_type, icon=icon))
+        await db.commit()
+        result = await db.execute(select(models.FinancialCategory).where(models.FinancialCategory.user_id == current_user.id))
+        categories = result.scalars().all()
+        
+    return categories
+
+@router.post("/categories", response_model=schemas.FinancialCategory)
+async def create_category(
+    cat_in: schemas.FinancialCategoryCreate,
+    db: AsyncSession = Depends(database.get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
+):
+    db_cat = models.FinancialCategory(**cat_in.model_dump(), user_id=current_user.id)
+    db.add(db_cat)
+    await db.commit()
+    await db.refresh(db_cat)
+    return db_cat
+
+# --- Accounts ---
+
 @router.get("/accounts", response_model=List[schemas.Account])
 async def get_accounts(
     db: AsyncSession = Depends(database.get_db),
     current_user: Annotated[schemas.User, Depends(get_current_user)] = None
 ):
     result = await db.execute(
-        select(models.Account).where(models.Account.user_id == current_user.id)
+        select(models.Account).where(
+            models.Account.user_id == current_user.id,
+            models.Account.is_active == True
+        )
     )
     accounts = result.scalars().all()
     
-    # If no accounts, create a default "Cash" account
     if not accounts:
         cash_account = models.Account(
-            user_id=current_user.id,
-            name="Cash",
-            type="CASH",
-            balance=0.0,
-            is_default=True
+            user_id=current_user.id, name="Cash", type="CASH", balance_cents=0, is_default=True
         )
         db.add(cash_account)
         await db.commit()
@@ -42,17 +87,14 @@ async def create_account(
     db: AsyncSession = Depends(database.get_db),
     current_user: Annotated[schemas.User, Depends(get_current_user)] = None
 ):
-    db_account = models.Account(
-        **account_in.model_dump(),
-        user_id=current_user.id
-    )
+    db_account = models.Account(**account_in.model_dump(), user_id=current_user.id)
     db.add(db_account)
     await db.commit()
     await db.refresh(db_account)
     return db_account
 
 @router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_account(
+async def archive_account(
     account_id: uuid.UUID,
     db: AsyncSession = Depends(database.get_db),
     current_user: Annotated[schemas.User, Depends(get_current_user)] = None
@@ -64,77 +106,112 @@ async def delete_account(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     
-    # Check if it has transactions
-    tx_check = await db.execute(select(models.Transaction).where(models.Transaction.account_id == account_id))
+    # Check for active ledger entries
+    tx_check = await db.execute(
+        select(models.LedgerEntry).where(
+            and_(models.LedgerEntry.account_id == account_id, models.LedgerEntry.deleted_at == None)
+        )
+    )
     if tx_check.first():
-         raise HTTPException(status_code=400, detail="Cannot delete account with existing transactions. Delete transactions first.")
+         raise HTTPException(status_code=400, detail="Cannot delete account with active transactions. Delete or Archive transactions first.")
 
-    await db.delete(account)
+    account.is_active = False # Soft delete/archive
     await db.commit()
     return None
 
-@router.get("/categories", response_model=List[str])
-async def get_categories():
-    return ["Food", "Transport", "Home", "Lifestyle", "Bills", "Shopping", "Misc", "Health", "Gift", "Education", "Travel"]
+# --- Ledger Entries ---
 
-# Transactions
-@router.post("/transactions", response_model=schemas.Transaction)
-async def create_transaction(
-    tx_in: schemas.TransactionCreate,
+@router.post("/ledger", response_model=schemas.LedgerEntry)
+async def create_ledger_entry(
+    entry_in: schemas.LedgerEntryCreate,
     db: AsyncSession = Depends(database.get_db),
     current_user: Annotated[schemas.User, Depends(get_current_user)] = None
 ):
-    # Verify account ownership
-    acc_result = await db.execute(
-        select(models.Account).where(and_(models.Account.id == tx_in.account_id, models.Account.user_id == current_user.id))
-    )
-    account = acc_result.scalar_one_or_none()
-    if not account:
+    # Verify account
+    acc_res = await db.execute(select(models.Account).where(models.Account.id == entry_in.account_id))
+    account = acc_res.scalar_one_or_none()
+    if not account or account.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    # Handle balance update
-    if tx_in.type == "INCOME":
-        account.balance += tx_in.amount
-    elif tx_in.type == "EXPENSE":
-        account.balance -= tx_in.amount
-    elif tx_in.type == "TRANSFER":
-        if not tx_in.to_account_id:
+    # Handle Balance
+    if entry_in.type == "INCOME":
+        account.balance_cents += entry_in.amount_cents
+    elif entry_in.type == "EXPENSE":
+        account.balance_cents -= entry_in.amount_cents
+    elif entry_in.type == "TRANSFER":
+        if not entry_in.to_account_id:
             raise HTTPException(status_code=400, detail="to_account_id required for transfers")
-        
-        to_acc_result = await db.execute(
-            select(models.Account).where(and_(models.Account.id == tx_in.to_account_id, models.Account.user_id == current_user.id))
-        )
-        to_account = to_acc_result.scalar_one_or_none()
-        if not to_account:
+        to_acc_res = await db.execute(select(models.Account).where(models.Account.id == entry_in.to_account_id))
+        to_account = to_acc_res.scalar_one_or_none()
+        if not to_account or to_account.user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Target account not found")
-        
-        account.balance -= tx_in.amount
-        to_account.balance += tx_in.amount
+        account.balance_cents -= entry_in.amount_cents
+        to_account.balance_cents += entry_in.amount_cents
 
-    db_tx = models.Transaction(
-        **tx_in.model_dump(),
-        user_id=current_user.id
-    )
-    db.add(db_tx)
+    db_entry = models.LedgerEntry(**entry_in.model_dump(), user_id=current_user.id)
+    db.add(db_entry)
     await db.commit()
-    await db.refresh(db_tx)
-    return db_tx
+    await db.refresh(db_entry)
+    return db_entry
 
-@router.get("/transactions/{target_date}", response_model=List[schemas.Transaction])
-async def get_daily_transactions(
-    target_date: date,
+@router.get("/ledger", response_model=List[schemas.LedgerEntry])
+async def get_ledger(
+    date: Optional[date] = None,
+    month: Optional[int] = None,
+    year: Optional[int] = None,
+    db: AsyncSession = Depends(database.get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
+):
+    stmt = select(models.LedgerEntry).where(
+        models.LedgerEntry.user_id == current_user.id,
+        models.LedgerEntry.deleted_at == None
+    )
+    if date:
+        stmt = stmt.where(models.LedgerEntry.date == date)
+    elif month and year:
+        # Filter by month/year
+        start_date = datetime(year, month, 1).date()
+        if month == 12:
+            end_date = datetime(year + 1, 1, 1).date() - timedelta(days=1)
+        else:
+            end_date = datetime(year, month + 1, 1).date() - timedelta(days=1)
+        stmt = stmt.where(and_(models.LedgerEntry.date >= start_date, models.LedgerEntry.date <= end_date))
+    
+    result = await db.execute(stmt.order_by(desc(models.LedgerEntry.date), desc(models.LedgerEntry.created_at)))
+    return result.scalars().all()
+
+@router.delete("/ledger/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_ledger_entry(
+    entry_id: uuid.UUID,
     db: AsyncSession = Depends(database.get_db),
     current_user: Annotated[schemas.User, Depends(get_current_user)] = None
 ):
     result = await db.execute(
-        select(models.Transaction).where(
-            and_(
-                models.Transaction.user_id == current_user.id,
-                models.Transaction.date == target_date
-            )
-        ).order_by(desc(models.Transaction.created_at))
+        select(models.LedgerEntry).where(and_(models.LedgerEntry.id == entry_id, models.LedgerEntry.user_id == current_user.id))
     )
-    return result.scalars().all()
+    entry = result.scalar_one_or_none()
+    if not entry or entry.deleted_at:
+        raise HTTPException(status_code=404, detail="Entry not found")
+
+    # Reverse balance
+    acc_res = await db.execute(select(models.Account).where(models.Account.id == entry.account_id))
+    account = acc_res.scalar_one_or_none()
+    if account:
+        if entry.type == "INCOME":
+            account.balance_cents -= entry.amount_cents
+        elif entry.type == "EXPENSE":
+            account.balance_cents += entry.amount_cents
+        elif entry.type == "TRANSFER":
+            account.balance_cents += entry.amount_cents
+            if entry.to_account_id:
+                to_acc_res = await db.execute(select(models.Account).where(models.Account.id == entry.to_account_id))
+                to_account = to_acc_res.scalar_one_or_none()
+                if to_account:
+                    to_account.balance_cents -= entry.amount_cents
+
+    entry.deleted_at = datetime.utcnow()
+    await db.commit()
+    return None
 
 @router.get("/summary", response_model=dict)
 async def get_finance_summary(
@@ -142,108 +219,31 @@ async def get_finance_summary(
     current_user: Annotated[schemas.User, Depends(get_current_user)] = None
 ):
     today = date.today()
-    start_of_week = today - timedelta(days=today.weekday())
-    start_of_last_week = start_of_week - timedelta(days=7)
+    month_start = date(today.year, today.month, 1)
     
-    # helper for range sum
-    async def get_range_total(start: date, end: date, tx_type: str):
-        stmt = select(func.sum(models.Transaction.amount)).where(
+    # Basic monthly aggregations
+    async def get_total(entry_type: str):
+        stmt = select(func.sum(models.LedgerEntry.amount_cents)).where(
             and_(
-                models.Transaction.user_id == current_user.id,
-                models.Transaction.type == tx_type,
-                models.Transaction.date >= start,
-                models.Transaction.date <= end
+                models.LedgerEntry.user_id == current_user.id,
+                models.LedgerEntry.type == entry_type,
+                models.LedgerEntry.date >= month_start,
+                models.LedgerEntry.deleted_at == None
             )
         )
         res = await db.execute(stmt)
-        return res.scalar() or 0.0
+        return res.scalar() or 0
 
-    this_week_expense = await get_range_total(start_of_week, today, "EXPENSE")
-    last_week_expense = await get_range_total(start_of_last_week, start_of_week - timedelta(days=1), "EXPENSE")
+    income = await get_total("INCOME")
+    expenses = await get_total("EXPENSE")
     
-    this_week_income = await get_range_total(start_of_week, today, "INCOME")
-    last_week_income = await get_range_total(start_of_last_week, start_of_week - timedelta(days=1), "INCOME")
-
-    # Categories
-    stmt_cat = select(
-        models.Transaction.category,
-        func.sum(models.Transaction.amount)
-    ).where(
-        and_(
-            models.Transaction.user_id == current_user.id,
-            models.Transaction.type == "EXPENSE",
-            models.Transaction.date >= (today - timedelta(days=30))
-        )
-    ).group_by(models.Transaction.category)
-    cat_res = await db.execute(stmt_cat)
-    categories = {row[0]: row[1] for row in cat_res.all()}
+    # Net worth
+    acc_res = await db.execute(select(func.sum(models.Account.balance_cents)).where(
+        and_(models.Account.user_id == current_user.id, models.Account.is_active == True)
+    ))
+    net_worth = acc_res.scalar() or 0
 
     return {
-        "this_week": {"expense": this_week_expense, "income": this_week_income},
-        "last_week": {"expense": last_week_expense, "income": last_week_income},
-        "categories_30d": categories,
-        "net_worth": sum([a.balance for a in (await db.execute(select(models.Account).where(models.Account.user_id == current_user.id))).scalars().all()])
+        "this_month": {"income": income, "expenses": expenses, "net": income - expenses},
+        "net_worth": net_worth
     }
-
-@router.delete("/transactions/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_transaction(
-    transaction_id: uuid.UUID,
-    db: AsyncSession = Depends(database.get_db),
-    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
-):
-    result = await db.execute(
-        select(models.Transaction).where(
-            and_(models.Transaction.id == transaction_id, models.Transaction.user_id == current_user.id)
-        )
-    )
-    db_tx = result.scalar_one_or_none()
-    if not db_tx:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    
-    # Reverse balance update
-    acc_result = await db.execute(select(models.Account).where(models.Account.id == db_tx.account_id))
-    account = acc_result.scalar_one_or_none()
-    if account:
-        if db_tx.type == "INCOME":
-            account.balance -= db_tx.amount
-        elif db_tx.type == "EXPENSE":
-            account.balance += db_tx.amount
-        elif db_tx.type == "TRANSFER":
-            account.balance += db_tx.amount
-            if db_tx.to_account_id:
-                to_acc_result = await db.execute(select(models.Account).where(models.Account.id == db_tx.to_account_id))
-                to_account = to_acc_result.scalar_one_or_none()
-                if to_account:
-                    to_account.balance -= db_tx.amount
-
-    await db.delete(db_tx)
-    await db.commit()
-    return None
-
-@router.get("/export/csv")
-async def export_finance_csv(
-    db: AsyncSession = Depends(database.get_db),
-    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
-):
-    from fastapi.responses import StreamingResponse
-    import io
-    import csv
-
-    result = await db.execute(
-        select(models.Transaction).where(models.Transaction.user_id == current_user.id).order_by(desc(models.Transaction.date))
-    )
-    transactions = result.scalars().all()
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Date", "Type", "Category", "Amount", "Description", "Currency"])
-    
-    for tx in transactions:
-        writer.writerow([tx.date, tx.type, tx.category, tx.amount, tx.description, tx.currency])
-    
-    output.seek(0)
-    return StreamingResponse(
-        io.BytesIO(output.getvalue().encode()),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=atlas_finance_{date.today()}.csv"}
-    )

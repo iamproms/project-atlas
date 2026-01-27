@@ -35,7 +35,7 @@ async def create_or_update_budget(
     db_budget = result.scalar_one_or_none()
 
     if db_budget:
-        db_budget.amount = budget_in.amount
+        db_budget.amount_cents = budget_in.amount_cents
     else:
         db_budget = models.Budget(
             **budget_in.model_dump(),

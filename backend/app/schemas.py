@@ -131,13 +131,32 @@ class DailyNote(DailyNoteBase):
     class Config:
         from_attributes = True
 
+# Financial Category Schemas
+class FinancialCategoryBase(BaseModel):
+    name: str = Field(..., max_length=100)
+    type: str = "EXPENSE" # INCOME, EXPENSE
+    icon: Optional[str] = None
+    is_active: bool = True
+
+class FinancialCategoryCreate(FinancialCategoryBase):
+    pass
+
+class FinancialCategory(FinancialCategoryBase):
+    id: UUID
+    user_id: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 # Account Schemas
 class AccountBase(BaseModel):
     name: str = Field(..., max_length=100)
     type: str = "BANK" # BANK, CASH, CARD, SAVINGS, WALLET
-    balance: float = 0.0
+    balance_cents: int = 0
     currency: str = "NGN"
     is_default: bool = False
+    is_active: bool = True
 
 class AccountCreate(AccountBase):
     pass
@@ -150,31 +169,34 @@ class Account(AccountBase):
     class Config:
         from_attributes = True
 
-# Transaction Schemas
-class TransactionBase(BaseModel):
+# Ledger Entry Schemas
+class LedgerEntryBase(BaseModel):
     date: date
-    amount: float
+    amount_cents: int
     type: str = "EXPENSE" # INCOME, EXPENSE, TRANSFER
-    category: str
     description: str
     account_id: UUID
     to_account_id: Optional[UUID] = None
+    category_id: Optional[UUID] = None
     currency: str = "NGN"
+    is_recurring: bool = False
 
-class TransactionCreate(TransactionBase):
+class LedgerEntryCreate(LedgerEntryBase):
     pass
 
-class Transaction(TransactionBase):
+class LedgerEntry(LedgerEntryBase):
     id: UUID
     user_id: UUID
     created_at: datetime
+    updated_at: datetime
+    deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
 # Recurring Transaction Schemas
 class RecurringTransactionBase(BaseModel):
-    amount: float
+    amount_cents: int
     type: str
     category: str
     description: str
@@ -197,7 +219,7 @@ class RecurringTransaction(RecurringTransactionBase):
 # Budget Schemas
 class BudgetBase(BaseModel):
     category: str = Field(..., max_length=50)
-    amount: float
+    amount_cents: int
     period: str = "MONTHLY"
 
 class BudgetCreate(BudgetBase):

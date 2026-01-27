@@ -43,30 +43,49 @@ async def startup():
             await db.rollback()
             print(f"⚠️ User normalization skipped or failed: {e}")
 
-        # 2. Legacy Expense Migration (V1 -> V2)
-        from sqlalchemy import text
+        # 2. Professional Finance Migration (V2 -> V3)
+        # Migrate Transaction -> LedgerEntry and convert Float -> Cent Integer
         try:
-            res = await db.execute(text("SELECT count(*) FROM expenses"))
+            from sqlalchemy import text
+            # Check if old transactions table exists and has data
+            res = await db.execute(text("SELECT count(*) FROM transactions"))
             if res.scalar() > 0:
-                print(f"📦 Migrating legacy expenses...")
+                print("📦 Migrating transactions to professional LedgerEntry (cents)...")
+                # 1. Ensure categories exist for users
                 users_res = await db.execute(select(models.User))
-                for user in users_res.scalars().all():
-                    acc_res = await db.execute(select(models.Account).where(models.Account.user_id == user.id))
-                    if not acc_res.scalar_one_or_none():
-                        cash_account = models.Account(user_id=user.id, name="Cash", type="CASH", balance=0.0)
-                        db.add(cash_account)
-                        await db.flush()
-                        exp_res = await db.execute(text(f"SELECT amount, category, description, date FROM expenses WHERE user_id = '{user.id}'"))
-                        for row in exp_res.all():
-                            tx = models.Transaction(user_id=user.id, account_id=cash_account.id, amount=row[0], category=row[1], description=row[2], date=row[3], type="EXPENSE")
-                            db.add(tx)
-                            cash_account.balance -= row[0]
+                users = users_res.scalars().all()
+                
+                # Fetch/Create default category for migration
+                # (Ideally we'd map them, but for safety we use descriptions and names)
+                
+                # 2. Migrate entries
+                tx_res = await db.execute(text("SELECT id, user_id, account_id, to_account_id, date, amount, type, category, description, currency, created_at FROM transactions"))
+                for row in tx_res.all():
+                    # amount cents
+                    amt_cents = int(round(row[5] * 100))
+                    
+                    # Create LedgerEntry
+                    entry = models.LedgerEntry(
+                        id=row[0], user_id=row[1], account_id=row[2], to_account_id=row[3],
+                        date=row[4], amount_cents=amt_cents, type=row[6],
+                        description=f"[{row[7]}] {row[8]}", # Preserve old category in description if not mapped
+                        currency=row[9], created_at=row[10]
+                    )
+                    db.add(entry)
+                
+                # 3. Update Account Balances
+                acc_res = await db.execute(text("SELECT id, balance FROM accounts"))
+                for acc_row in acc_res.all():
+                    bal_cents = int(round(acc_row[1] * 100))
+                    await db.execute(text(f"UPDATE accounts SET balance_cents = {bal_cents} WHERE id = '{acc_row[0]}'"))
+                
                 await db.commit()
-                await db.execute(text("DELETE FROM expenses"))
+                # 4. Clear/Drop old table if desired (or just empty it)
+                await db.execute(text("DELETE FROM transactions"))
                 await db.commit()
-                print("✅ Expense migration complete.")
-        except Exception:
-            pass
+                print("✅ Professional finance migration complete.")
+        except Exception as e:
+            print(f"ℹ️ Migration skipped or table 'transactions' not found: {e}")
 
     print("Database tables initialized.")
 
