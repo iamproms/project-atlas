@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
 import { Plus, Trash2, CreditCard, Tag, Info } from 'lucide-react';
 
-const CATEGORIES = [
+const EXPENSE_CATEGORIES = [
     { label: 'Food', value: 'Food', icon: '🍴' },
     { label: 'Transport', value: 'Transport', icon: '🚗' },
     { label: 'Home', value: 'Home', icon: '🏠' },
@@ -13,6 +13,15 @@ const CATEGORIES = [
     { label: 'Health', value: 'Health', icon: '🏥' },
     { label: 'Education', value: 'Education', icon: '🎓' },
     { label: 'Gift', value: 'Gift', icon: '🎁' },
+    { label: 'Misc', value: 'Misc', icon: '✨' },
+];
+
+const INCOME_CATEGORIES = [
+    { label: 'Salary', value: 'Salary', icon: '💰' },
+    { label: 'Business', value: 'Business', icon: '📈' },
+    { label: 'Freelance', value: 'Freelance', icon: '💻' },
+    { label: 'Gift', value: 'Gift', icon: '🎁' },
+    { label: 'Interest', value: 'Interest', icon: '🏦' },
     { label: 'Misc', value: 'Misc', icon: '✨' },
 ];
 
@@ -29,14 +38,16 @@ export default function ExpenseWidget({ dateStr }) {
     // Accounts for selection
     const { data: accounts = [] } = useQuery({
         queryKey: ['finance', 'accounts'],
-        queryFn: () => api.get('/finance/accounts').then(res => res.data),
-        onSuccess: (data) => {
-            if (data.length > 0 && !accountId) {
-                const defaultAcc = data.find(a => a.is_default) || data[0];
-                setAccountId(defaultAcc.id);
-            }
-        }
+        queryFn: () => api.get('/finance/accounts').then(res => res.data)
     });
+
+    // Fix: Query v5 workaround for onSuccess initialization
+    React.useEffect(() => {
+        if (accounts.length > 0 && !accountId) {
+            const defaultAcc = accounts.find(a => a.is_default) || accounts[0];
+            setAccountId(defaultAcc.id);
+        }
+    }, [accounts, accountId]);
 
     const { data: transactions = [] } = useQuery({
         queryKey: ['finance', 'transactions', dateStr],
@@ -165,9 +176,9 @@ export default function ExpenseWidget({ dateStr }) {
                             </select>
                         </div>
 
-                        {/* Category Selector (simplified) */}
+                        {/* Category Selector */}
                         <div className="grid grid-cols-5 gap-2">
-                            {CATEGORIES.map(cat => (
+                            {(type === 'EXPENSE' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(cat => (
                                 <button
                                     key={cat.value}
                                     type="button"

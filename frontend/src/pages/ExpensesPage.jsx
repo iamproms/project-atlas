@@ -264,15 +264,25 @@ export default function ExpensesPage() {
                             {accounts.map(acc => (
                                 <div key={acc.id} className="flex items-center justify-between p-4 rounded-xl bg-surface/50 border border-transparent hover:border-primary/20 transition-all group">
                                     <div className="flex items-center gap-3 font-semibold">
-                                        <div className="w-12 h-12 rounded-xl bg-background flex items-center justify-center text-2xl shadow-inner border border-border-subtle">
-                                            {acc.type === 'CASH' ? '💵' : acc.type === 'SAVINGS' ? '🏦' : acc.type === 'CARD' ? '💳' : '🏦'}
+                                        <div className="w-12 h-12 rounded-xl bg-background flex items-center justify-center text-2xl shadow-inner border border-border-subtle relative">
+                                            {acc.type === 'CASH' ? '💵' : acc.type === 'SAVINGS' ? '🏦' : '💳'}
+                                            {acc.is_default && (
+                                                <div className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full border-2 border-surface flex items-center justify-center" title="Primary Account">
+                                                    <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                                                </div>
+                                            )}
                                         </div>
                                         <div>
-                                            <p className="text-sm font-bold text-text-primary">{acc.name}</p>
-                                            <p className="text-[10px] text-text-secondary uppercase font-bold tracking-widest">{acc.type}</p>
+                                            <p className="text-sm font-bold text-text-primary flex items-center gap-2">
+                                                {acc.name}
+                                                {acc.is_default && <span className="text-[8px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Primary</span>}
+                                            </p>
+                                            <p className="text-[10px] text-text-secondary uppercase font-bold tracking-widest opacity-60">{acc.type}</p>
                                         </div>
                                     </div>
-                                    <p className="font-bold tabular-nums">₦{acc.balance.toLocaleString()}</p>
+                                    <div className="text-right">
+                                        <p className="font-bold tabular-nums text-lg">₦{acc.balance.toLocaleString()}</p>
+                                    </div>
                                 </div>
                             ))}
                         </div>
