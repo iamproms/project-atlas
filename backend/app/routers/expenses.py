@@ -142,11 +142,20 @@ async def get_all_categories(
     db: AsyncSession = Depends(database.get_db),
     current_user: Annotated[schemas.User, Depends(get_current_user)] = None
 ):
-    stmt = select(models.Expense.category).where(
+    # Get categories from Expenses
+    stmt_expenses = select(models.Expense.category).where(
         models.Expense.user_id == current_user.id
     ).distinct()
-    
-    result = await db.execute(stmt)
-    categories = result.scalars().all()
-    # Return sorted list
-    return sorted(categories)
+    result_expenses = await db.execute(stmt_expenses)
+    expense_cats = set(result_expenses.scalars().all())
+
+    # Get categories from Budgets
+    stmt_budgets = select(models.Budget.category).where(
+        models.Budget.user_id == current_user.id
+    ).distinct()
+    result_budgets = await db.execute(stmt_budgets)
+    budget_cats = set(result_budgets.scalars().all())
+
+    # Union and sort
+    all_cats = expense_cats.union(budget_cats)
+    return sorted(list(all_cats))
