@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     format, startOfMonth, endOfMonth, parseISO, subMonths, addMonths,
-    isSameDay, isSameWeek, startOfWeek, endOfWeek
+    isSameDay, isSameWeek, startOfWeek, endOfWeek, isValid
 } from 'date-fns';
 import api from '../api/client';
 import {
@@ -15,7 +15,9 @@ import {
     Target,
     BarChart2,
     Plus,
-    CreditCard
+    CreditCard,
+    Calendar,
+    X
 } from 'lucide-react';
 import { SpendingTrendChart, CategoryPieChart } from '../components/ExpenseCharts';
 import BudgetModal from '../components/BudgetModal';
@@ -24,6 +26,7 @@ export default function ExpensesPage() {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [showCharts, setShowCharts] = useState(false);
     const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+    const [selectedDate, setSelectedDate] = useState(''); // YYYY-MM-DD
 
     const queryClient = useQueryClient();
 
@@ -69,8 +72,13 @@ export default function ExpensesPage() {
         ? Math.min((totalSpent / totalBudgetLimit) * 100, 100).toFixed(0)
         : 0;
 
-    // --- Grouping for Daily List ---
-    const sortedExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+    // --- Filtering & Grouping ---
+    let visibleExpenses = expenses;
+    if (selectedDate) {
+        visibleExpenses = expenses.filter(e => e.date === selectedDate);
+    }
+
+    const sortedExpenses = [...visibleExpenses].sort((a, b) => new Date(b.date) - new Date(a.date));
     const groupedExpenses = sortedExpenses.reduce((acc, curr) => {
         const dateKey = curr.date; // "YYYY-MM-DD"
         if (!acc[dateKey]) acc[dateKey] = [];
@@ -78,7 +86,8 @@ export default function ExpensesPage() {
         return acc;
     }, {});
 
-    // Category Spend for Budget Bars
+    // Category Spend used for Sidebar (Based on monthly total, not filtered)
+    // We want the budget bars to show MONTHLY progress regardless of the daily filter view
     const categorySpend = expenses.reduce((acc, curr) => {
         acc[curr.category] = (acc[curr.category] || 0) + curr.amount;
         return acc;
@@ -94,7 +103,7 @@ export default function ExpensesPage() {
                     <p className="text-text-secondary text-sm italic">Track your spending, budgets, and habits.</p>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap justify-end">
                     <button
                         onClick={() => setShowCharts(!showCharts)}
                         className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border ${showCharts ? 'bg-primary text-white border-primary' : 'bg-surface text-text-secondary border-border-subtle hover:bg-white/5'}`}
@@ -102,6 +111,24 @@ export default function ExpensesPage() {
                         <BarChart2 size={16} />
                         In-Depth Analysis
                     </button>
+
+                    <div className="flex items-center gap-2 bg-surface p-1 rounded-xl border border-border-subtle">
+                        <div className="relative">
+                            <input
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => setSelectedDate(e.target.value)}
+                                className="bg-transparent text-xs font-bold uppercase tracking-widest text-text-secondary border-none focus:ring-0 cursor-pointer pl-8 pr-2 py-2"
+                                style={{ colorScheme: 'dark' }}
+                            />
+                            <Calendar size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
+                        </div>
+                        {selectedDate && (
+                            <button onClick={() => setSelectedDate('')} className="p-1 hover:text-white text-text-secondary">
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
 
                     <div className="flex items-center gap-4 bg-surface p-2 rounded-xl border border-border-subtle">
                         <button
@@ -123,7 +150,7 @@ export default function ExpensesPage() {
                 </div>
             </div>
 
-            {/* Metrics Row */}
+            {/* Metrics Row - Always show Monthly Context */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <MetricCard
                     title="Spent Today"
@@ -170,14 +197,18 @@ export default function ExpensesPage() {
                 <div className="lg:col-span-8">
                     <div className="notion-card p-8">
                         <div className="flex items-center justify-between mb-8">
-                            <h3 className="text-xl font-bold tracking-tight">Transactions</h3>
+                            <h3 className="text-xl font-bold tracking-tight">
+                                {selectedDate ? `Transactions for ${format(parseISO(selectedDate), 'MMMM do')}` : 'Transactions'}
+                            </h3>
                             <button className="text-xs text-text-secondary hover:text-primary transition-colors">Export CSV</button>
                         </div>
 
                         {/* Grouped List */}
                         <div className="space-y-8">
                             {Object.keys(groupedExpenses).length === 0 ? (
-                                <div className="text-center py-12 text-text-secondary italic text-sm">No expenses recorded for this month.</div>
+                                <div className="text-center py-12 text-text-secondary italic text-sm">
+                                    {selectedDate ? "No expenses found for this date." : "No expenses recorded for this month."}
+                                </div>
                             ) : (
                                 Object.entries(groupedExpenses).map(([dateStr, exps]) => (
                                     <div key={dateStr}>
@@ -237,17 +268,25 @@ export default function ExpensesPage() {
                         <div className="space-y-6">
                             {/* Fetch all categories from expenses + existing budgets */}
                             {Array.from(new Set([...Object.keys(categorySpend), ...budgets.map(b => b.category)])).map(cat => {
-                                const spent = categorySpend[cat] || 0;
-                                const budgetObj = budgets.find(b => b.category === cat);
+                                // Robust case-insensitive approximate matching
+                                const categoryName = cat;
+                                const spent = categorySpend[categoryName] || 0;
+
+                                const budgetObj = budgets.find(b => b.category.toLowerCase() === categoryName.toLowerCase());
                                 const limit = budgetObj ? budgetObj.amount : 0;
 
                                 const percent = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
-                                const isOver = spent > limit && limit > 0;
+                                const isApproaching = percent >= 85 && percent < 100;
+                                const isOver = spent >= limit && limit > 0;
+
+                                let barColor = 'bg-primary';
+                                if (isOver) barColor = 'bg-red-500';
+                                else if (isApproaching) barColor = 'bg-yellow-500';
 
                                 return (
                                     <div key={cat}>
                                         <div className="flex justify-between text-xs mb-2">
-                                            <span className="font-bold">{cat}</span>
+                                            <span className="font-bold">{categoryName}</span>
                                             <span className="text-text-secondary">
                                                 ₦{spent.toLocaleString()}
                                                 <span className="mx-1">/</span>
@@ -257,7 +296,7 @@ export default function ExpensesPage() {
                                         <div className="h-2 bg-surface rounded-full overflow-hidden relative">
                                             {limit === 0 && <div className="absolute inset-0 bg-white/5" />}
                                             <div
-                                                className={`h-full rounded-full transition-all duration-500 ${isOver ? 'bg-red-500' : 'bg-primary'}`}
+                                                className={`h-full rounded-full transition-all duration-500 ${barColor}`}
                                                 style={{ width: `${limit > 0 ? percent : 0}%` }}
                                             />
                                         </div>
