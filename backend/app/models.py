@@ -65,10 +65,18 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[Optional[str]] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # New Fields
+    status: Mapped[str] = mapped_column(String(50), default="idea") # idea, in_progress, on_hold, completed
+    priority: Mapped[str] = mapped_column(String(20), default="medium") # low, medium, high
+    deadline: Mapped[Optional[date]] = mapped_column(Date)
+    tags: Mapped[Optional[str]] = mapped_column(Text) # Comma separated for now
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     owner: Mapped["User"] = relationship(back_populates="projects")
     focus_history: Mapped[List["ProjectFocus"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+    todos: Mapped[List["Todo"]] = relationship(back_populates="project")
 
 class ProjectFocus(Base):
     __tablename__ = "project_focus"
@@ -171,6 +179,8 @@ class Todo(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("projects.id"), index=True, nullable=True)
+    
     date: Mapped[date] = mapped_column(Date, index=True)
     content: Mapped[str] = mapped_column(String(255))
     priority: Mapped[str] = mapped_column(String(10), default="medium") # low, medium, high
@@ -179,6 +189,7 @@ class Todo(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     owner: Mapped["User"] = relationship(back_populates="todos")
+    project: Mapped["Project"] = relationship(back_populates="todos")
 
 class LearningSession(Base):
     __tablename__ = "learning_sessions"

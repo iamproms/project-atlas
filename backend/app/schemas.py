@@ -76,6 +76,10 @@ class HabitLog(HabitLogBase):
 class ProjectBase(BaseModel):
     name: str = Field(..., max_length=255)
     description: Optional[str] = None
+    status: str = "idea"
+    priority: str = "medium"
+    deadline: Optional[date] = None
+    tags: Optional[str] = None
 
 class ProjectCreate(ProjectBase):
     pass
@@ -85,6 +89,7 @@ class Project(ProjectBase):
     user_id: UUID
     is_active: bool
     created_at: datetime
+    todos: List["Todo"] = [] # For progress calculation
 
     class Config:
         from_attributes = True
@@ -245,6 +250,7 @@ class TodoBase(BaseModel):
     date: date
     priority: str = "medium"
     is_completed: bool = False
+    project_id: Optional[UUID] = None
 
 class TodoCreate(TodoBase):
     pass
@@ -255,6 +261,7 @@ class TodoUpdate(BaseModel):
     is_completed: Optional[bool] = None
     is_carried_over: Optional[bool] = None
     date: Optional[date] = None
+    project_id: Optional[UUID] = None
 
 class Todo(TodoBase):
     id: UUID

@@ -13,9 +13,20 @@ async def get_projects(
     db: AsyncSession = Depends(database.get_db),
     current_user: Annotated[schemas.User, Depends(get_current_user)] = None
 ):
+    from sqlalchemy.orm import selectinload
     result = await db.execute(
-        select(models.Project).where(models.Project.user_id == current_user.id)
+        select(models.Project)
+        .where(models.Project.user_id == current_user.id)
+        .options(selectinload(models.Project.todos))
     )
+    # Note: The Pydantic schema for Project needs to arguably include `todos` if we want to serialize them, 
+    # OR we compute a `progress` field. 
+    # Let's adjust schemas.py first to include `todos` list if we do this.
+    # For now, let's just return the project and let the frontend query details.
+    # actually, let's allow the frontend to calculate progress from the full list if it's small, 
+    # but strictly speaking `models.Project` in response_model=List[schemas.Project] 
+    # will try to validate. If `schemas.Project` doesn't have `todos`, it ignores it.
+    # I'll stick to the original plan: minimal changes first. 
     return result.scalars().all()
 
 @router.post("/", response_model=schemas.Project)
@@ -48,6 +59,24 @@ async def get_project_focus(
         )
     )
     return result.scalar_one_or_none()
+
+@router.get("/{project_id}/todos", response_model=List[schemas.Todo])
+async def get_project_todos(
+    project_id: str,
+    db: AsyncSession = Depends(database.get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
+):
+    import uuid
+    uid = uuid.UUID(project_id)
+    result = await db.execute(
+        select(models.Todo).where(
+            and_(
+                models.Todo.project_id == uid,
+                models.Todo.user_id == current_user.id
+            )
+        ).order_by(models.Todo.priority.desc(), models.Todo.date)
+    )
+    return result.scalars().all()
 
 @router.post("/focus", response_model=schemas.ProjectFocus)
 async def set_project_focus(
@@ -106,6 +135,10 @@ async def update_project(
     
     db_project.name = project_update.name
     db_project.description = project_update.description
+    db_project.status = project_update.status
+    db_project.priority = project_update.priority
+    db_project.deadline = project_update.deadline
+    db_project.tags = project_update.tags
     
     await db.commit()
     await db.refresh(db_project)
