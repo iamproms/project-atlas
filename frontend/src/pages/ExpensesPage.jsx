@@ -266,46 +266,62 @@ export default function ExpensesPage() {
                         </div>
 
                         <div className="space-y-6">
-                            {/* Fetch all categories from expenses + existing budgets */}
-                            {Array.from(new Set([...Object.keys(categorySpend), ...budgets.map(b => b.category)])).map(cat => {
-                                // Robust case-insensitive approximate matching
-                                const categoryName = cat;
-                                const spent = categorySpend[categoryName] || 0;
+                            {/* Robust Merging of Expenses and Budgets */}
+                            {(() => {
+                                const budgetMap = {};
 
-                                const budgetObj = budgets.find(b => b.category.toLowerCase() === categoryName.toLowerCase());
-                                const limit = budgetObj ? budgetObj.amount : 0;
+                                // 1. Add Expenses (Normalize Keys)
+                                Object.entries(categorySpend).forEach(([cat, amount]) => {
+                                    const key = cat.toLowerCase().trim();
+                                    if (!budgetMap[key]) budgetMap[key] = { name: cat, spent: 0, limit: 0 };
+                                    budgetMap[key].spent += amount;
+                                });
 
-                                const percent = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
-                                const isApproaching = percent >= 85 && percent < 100;
-                                const isOver = spent >= limit && limit > 0;
+                                // 2. Add Budgets (Normalize Keys)
+                                budgets.forEach(b => {
+                                    const key = b.category.toLowerCase().trim();
+                                    // If exists, use existing casing, else use budget casing
+                                    if (!budgetMap[key]) budgetMap[key] = { name: b.category, spent: 0, limit: 0 };
+                                    budgetMap[key].limit = b.amount;
+                                });
 
-                                let barColor = 'bg-primary';
-                                if (isOver) barColor = 'bg-red-500';
-                                else if (isApproaching) barColor = 'bg-yellow-500';
+                                const items = Object.values(budgetMap).sort((a, b) => b.spent - a.spent);
 
-                                return (
-                                    <div key={cat}>
-                                        <div className="flex justify-between text-xs mb-2">
-                                            <span className="font-bold">{categoryName}</span>
-                                            <span className="text-text-secondary">
-                                                ₦{spent.toLocaleString()}
-                                                <span className="mx-1">/</span>
-                                                {limit > 0 ? `₦${limit.toLocaleString()}` : <span className="text-text-secondary/50">--</span>}
-                                            </span>
+                                if (items.length === 0) {
+                                    return <p className="text-text-secondary text-xs italic text-center py-4">Set a budget to get started.</p>;
+                                }
+
+                                return items.map(item => {
+                                    const { name, spent, limit } = item;
+                                    const percent = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
+                                    const isApproaching = percent >= 85 && percent < 100;
+                                    const isOver = spent >= limit && limit > 0;
+
+                                    let barColor = 'bg-primary';
+                                    if (isOver) barColor = 'bg-red-500';
+                                    else if (isApproaching) barColor = 'bg-yellow-500';
+
+                                    return (
+                                        <div key={name}>
+                                            <div className="flex justify-between text-xs mb-2">
+                                                <span className="font-bold">{name}</span>
+                                                <span className="text-text-secondary">
+                                                    ₦{spent.toLocaleString()}
+                                                    <span className="mx-1">/</span>
+                                                    {limit > 0 ? `₦${limit.toLocaleString()}` : <span className="text-text-secondary/50">--</span>}
+                                                </span>
+                                            </div>
+                                            <div className="h-2 bg-surface rounded-full overflow-hidden relative">
+                                                {limit === 0 && <div className="absolute inset-0 bg-white/5" />}
+                                                <div
+                                                    className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                                    style={{ width: `${limit > 0 ? percent : 0}%` }}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="h-2 bg-surface rounded-full overflow-hidden relative">
-                                            {limit === 0 && <div className="absolute inset-0 bg-white/5" />}
-                                            <div
-                                                className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                                                style={{ width: `${limit > 0 ? percent : 0}%` }}
-                                            />
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                            {Object.keys(categorySpend).length === 0 && budgets.length === 0 && (
-                                <p className="text-text-secondary text-xs italic text-center py-4">Set a budget to get started.</p>
-                            )}
+                                    );
+                                });
+                            })()}
                         </div>
                     </div>
                 </div>

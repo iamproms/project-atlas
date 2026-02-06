@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
 import { Plus, Trash2 } from 'lucide-react';
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
     'Food', 'Transport', 'Home', 'Lifestyle', 'Bills', 'Shopping', 'Health', 'Education', 'Gift', 'Misc'
 ];
 
@@ -11,6 +11,7 @@ export default function ExpenseWidget({ dateStr }) {
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
     const [category, setCategory] = useState('Food');
+    const [isCustomCategory, setIsCustomCategory] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
 
@@ -25,8 +26,12 @@ export default function ExpenseWidget({ dateStr }) {
         mutationFn: (newExp) => api.post('/expenses/', newExp),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['expenses', dateStr] });
+            // Also invalidate range based queries to update dashboards
+            queryClient.invalidateQueries({ queryKey: ['expenses-range'] });
             setAmount('');
             setDescription('');
+            if (isCustomCategory) setCategory('Food');
+            setIsCustomCategory(false);
             setIsAdding(false);
             setIsSuccess(true);
             setTimeout(() => setIsSuccess(false), 3000);
@@ -40,7 +45,7 @@ export default function ExpenseWidget({ dateStr }) {
             date: dateStr,
             amount: parseFloat(amount),
             description,
-            category
+            category: category.trim()
         });
     };
 
@@ -98,13 +103,38 @@ export default function ExpenseWidget({ dateStr }) {
                     </button>
                 ) : (
                     <form onSubmit={handleSubmit} className="bg-surface/30 p-4 rounded-2xl border border-border-subtle space-y-4 animate-in slide-in-from-top-2 duration-200 shadow-xl">
-                        <select
-                            value={category}
-                            onChange={(e) => setCategory(e.target.value)}
-                            className="w-full bg-background border border-border-subtle rounded-lg px-2 py-1.5 text-xs text-text-primary outline-none"
-                        >
-                            {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                        </select>
+
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <label className="text-[10px] uppercase font-bold text-text-secondary">Category</label>
+                                <button
+                                    type="button"
+                                    onClick={() => { setIsCustomCategory(!isCustomCategory); setCategory(isCustomCategory ? 'Food' : ''); }}
+                                    className="text-[10px] text-primary hover:underline"
+                                >
+                                    {isCustomCategory ? 'Select List' : 'Custom'}
+                                </button>
+                            </div>
+
+                            {isCustomCategory ? (
+                                <input
+                                    value={category}
+                                    onChange={(e) => setCategory(e.target.value)}
+                                    placeholder="Enter category name"
+                                    className="w-full bg-background border border-border-subtle rounded-lg px-2 py-1.5 text-xs text-text-primary outline-none focus:border-primary"
+                                    autoFocus
+                                    required
+                                />
+                            ) : (
+                                <select
+                                    value={category}
+                                    onChange={(e) => setCategory(e.target.value)}
+                                    className="w-full bg-background border border-border-subtle rounded-lg px-2 py-1.5 text-xs text-text-primary outline-none"
+                                >
+                                    {DEFAULT_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                </select>
+                            )}
+                        </div>
 
                         <div className="space-y-3">
                             <input
@@ -112,7 +142,6 @@ export default function ExpenseWidget({ dateStr }) {
                                 placeholder="What for?"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
-                                autoFocus
                             />
                             <div className="flex items-center gap-2">
                                 <span className="text-text-secondary font-bold">₦</span>
