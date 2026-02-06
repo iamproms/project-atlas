@@ -79,6 +79,15 @@ export default function ExpensesPage() {
         })
     });
 
+    // Fetch All Categories (Defaults + Custom)
+    const { data: allCategories = DEFAULT_CATEGORIES } = useQuery({
+        queryKey: ['categories'],
+        queryFn: () => api.get('/expenses/categories/all').then(res => {
+            const unique = new Set([...DEFAULT_CATEGORIES, ...res.data]);
+            return Array.from(unique);
+        }).catch(() => DEFAULT_CATEGORIES)
+    });
+
     const deleteExp = useMutation({
         mutationFn: (id) => api.delete(`/expenses/${id}`),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses-range'] })
