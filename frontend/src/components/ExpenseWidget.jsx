@@ -22,6 +22,14 @@ export default function ExpenseWidget({ dateStr }) {
         queryFn: () => api.get(`/expenses/${dateStr}`).then(res => res.data)
     });
 
+    const { data: allCategories = [] } = useQuery({
+        queryKey: ['categories'],
+        queryFn: () => api.get('/expenses/categories/all').then(res => res.data).catch(() => [])
+    });
+
+    // Merge Defaults with Fetched Custom Categories
+    const categoriesToDisplay = Array.from(new Set([...DEFAULT_CATEGORIES, ...allCategories]));
+
     const createExpense = useMutation({
         mutationFn: (newExp) => api.post('/expenses/', newExp),
         onSuccess: () => {
@@ -131,7 +139,7 @@ export default function ExpenseWidget({ dateStr }) {
                                     onChange={(e) => setCategory(e.target.value)}
                                     className="w-full bg-background border border-border-subtle rounded-lg px-2 py-1.5 text-xs text-text-primary outline-none"
                                 >
-                                    {DEFAULT_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                    {categoriesToDisplay.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                 </select>
                             )}
                         </div>

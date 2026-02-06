@@ -136,3 +136,17 @@ async def get_expenses_summary(
     result = await db.execute(stmt)
     summary = {row[0]: row[1] or 0.0 for row in result.all()}
     return summary
+
+@router.get("/categories/all", response_model=List[str])
+async def get_all_categories(
+    db: AsyncSession = Depends(database.get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
+):
+    stmt = select(models.Expense.category).where(
+        models.Expense.user_id == current_user.id
+    ).distinct()
+    
+    result = await db.execute(stmt)
+    categories = result.scalars().all()
+    # Return sorted list
+    return sorted(categories)

@@ -301,7 +301,7 @@ export default function ExpensesPage() {
                                         className="bg-[#151515] border border-border-subtle rounded-lg pl-9 pr-3 py-1.5 text-xs text-text-primary focus:border-primary outline-none appearance-none cursor-pointer"
                                     >
                                         <option value="All">All Categories</option>
-                                        {DEFAULT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                        {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
                                 </div>
 
