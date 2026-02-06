@@ -8,6 +8,24 @@ from ..auth import get_current_user
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
 
+@router.get("/range", response_model=List[schemas.Expense])
+async def get_expenses_range(
+    start_date: date,
+    end_date: date,
+    db: AsyncSession = Depends(database.get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
+):
+    result = await db.execute(
+        select(models.Expense).where(
+            and_(
+                models.Expense.user_id == current_user.id,
+                models.Expense.date >= start_date,
+                models.Expense.date <= end_date
+            )
+        ).order_by(models.Expense.date.desc())
+    )
+    return result.scalars().all()
+
 @router.get("/{expense_date}", response_model=List[schemas.Expense])
 async def get_expenses(
     expense_date: date,
