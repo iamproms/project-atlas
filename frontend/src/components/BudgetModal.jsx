@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
-import { X } from 'lucide-react';
+import { X, Plus } from 'lucide-react';
 
 export default function BudgetModal({ isOpen, onClose, existingBudgets = [] }) {
     const [category, setCategory] = useState('');
+    const [isCustom, setIsCustom] = useState(false);
     const [amount, setAmount] = useState('');
     const [period, setPeriod] = useState('MONTHLY');
     const queryClient = useQueryClient();
@@ -16,6 +17,7 @@ export default function BudgetModal({ isOpen, onClose, existingBudgets = [] }) {
             onClose();
             setCategory('');
             setAmount('');
+            setIsCustom(false);
         }
     });
 
@@ -24,17 +26,17 @@ export default function BudgetModal({ isOpen, onClose, existingBudgets = [] }) {
     const handleSubmit = (e) => {
         e.preventDefault();
         saveBudget.mutate({
-            category,
+            category: category.trim(), // Ensure no whitespace issues
             amount: parseFloat(amount),
             period
         });
     };
 
-    const categories = ["Food", "Transport", "Shopping", "Entertainment", "Bills", "Health", "Misc"];
+    const defaultCategories = ["Food", "Transport", "Shopping", "Entertainment", "Bills", "Health", "Misc"];
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-[#202020] border border-white/10 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+            <div className="bg-[#202020] border border-white/10 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
                 <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
                     <h3 className="text-lg font-bold">Set Budget</h3>
                     <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors">
@@ -44,18 +46,40 @@ export default function BudgetModal({ isOpen, onClose, existingBudgets = [] }) {
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div>
-                        <label className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-2 block">Category</label>
-                        <select
-                            value={category}
-                            onChange={(e) => setCategory(e.target.value)}
-                            required
-                            className="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-primary appearance-none"
-                        >
-                            <option value="" disabled>Select a category</option>
-                            {categories.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                        </select>
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="text-xs font-bold uppercase tracking-widest text-text-secondary">Category</label>
+                            <button
+                                type="button"
+                                onClick={() => { setIsCustom(!isCustom); setCategory(''); }}
+                                className="text-[10px] text-primary hover:underline"
+                            >
+                                {isCustom ? 'Select from list' : 'Enter custom'}
+                            </button>
+                        </div>
+
+                        {isCustom ? (
+                            <input
+                                type="text"
+                                value={category}
+                                onChange={(e) => setCategory(e.target.value)}
+                                required
+                                autoFocus
+                                className="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-primary"
+                                placeholder="e.g. Subscriptions"
+                            />
+                        ) : (
+                            <select
+                                value={category}
+                                onChange={(e) => setCategory(e.target.value)}
+                                required
+                                className="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-primary appearance-none"
+                            >
+                                <option value="" disabled>Select a category</option>
+                                {defaultCategories.map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+                        )}
                     </div>
 
                     <div>
