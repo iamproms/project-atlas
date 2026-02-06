@@ -141,6 +141,12 @@ class ExpenseBase(BaseModel):
 class ExpenseCreate(ExpenseBase):
     pass
 
+class ExpenseUpdate(BaseModel):
+    date: Optional[date] = None
+    amount: Optional[float] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+
 class Expense(ExpenseBase):
     id: UUID
     user_id: UUID

@@ -55,6 +55,39 @@ async def create_expense(
     db.add(db_expense)
     await db.commit()
     await db.refresh(db_expense)
+    await db.commit()
+    await db.refresh(db_expense)
+    return db_expense
+
+@router.put("/{expense_id}", response_model=schemas.Expense)
+async def update_expense(
+    expense_id: str,
+    expense_update: schemas.ExpenseUpdate,
+    db: AsyncSession = Depends(database.get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
+):
+    import uuid
+    try:
+        uid = uuid.UUID(expense_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid expense ID")
+
+    result = await db.execute(
+        select(models.Expense).where(
+            and_(models.Expense.id == uid, models.Expense.user_id == current_user.id)
+        )
+    )
+    db_expense = result.scalar_one_or_none()
+    
+    if not db_expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    update_data = expense_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_expense, key, value)
+
+    await db.commit()
+    await db.refresh(db_expense)
     return db_expense
 
 @router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
