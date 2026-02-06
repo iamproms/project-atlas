@@ -13,7 +13,11 @@ from . import models, schemas, database
 
 load_dotenv()
 
-SECRET_KEY = os.getenv("SECRET_KEY", "yoursecretkeyhere")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    # Fallback only for development, warn user
+    print("⚠️  WARNING: SECRET_KEY not found in env. Using insecure dev key.")
+    SECRET_KEY = "yoursecretkeyhere"
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
