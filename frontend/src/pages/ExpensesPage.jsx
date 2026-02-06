@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { SpendingTrendChart, CategoryPieChart } from '../components/ExpenseCharts';
 import BudgetModal from '../components/BudgetModal';
+import { DEFAULT_CATEGORIES } from '../utils/constants';
 
 export default function ExpensesPage() {
     const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -42,7 +43,10 @@ export default function ExpensesPage() {
     // Fetch Budgets
     const { data: budgets = [] } = useQuery({
         queryKey: ['budgets'],
-        queryFn: () => api.get('/budgets').then(res => res.data).catch(() => [])
+        queryFn: () => api.get('/budgets/').then(res => res.data).catch((err) => {
+            console.error("Failed to fetch budgets:", err);
+            return [];
+        })
     });
 
     const deleteExp = useMutation({
@@ -270,25 +274,36 @@ export default function ExpensesPage() {
                             {(() => {
                                 const budgetMap = {};
 
-                                // 1. Add Expenses (Normalize Keys)
+                                // 1. Initialize with DEFAULT_CATEGORIES
+                                DEFAULT_CATEGORIES.forEach(cat => {
+                                    const key = cat.toLowerCase().trim();
+                                    budgetMap[key] = { name: cat, spent: 0, limit: 0 };
+                                });
+
+                                // 2. Add Expenses (Normalize Keys)
                                 Object.entries(categorySpend).forEach(([cat, amount]) => {
                                     const key = cat.toLowerCase().trim();
                                     if (!budgetMap[key]) budgetMap[key] = { name: cat, spent: 0, limit: 0 };
                                     budgetMap[key].spent += amount;
                                 });
 
-                                // 2. Add Budgets (Normalize Keys)
+                                // 3. Add Budgets (Normalize Keys)
                                 budgets.forEach(b => {
                                     const key = b.category.toLowerCase().trim();
-                                    // If exists, use existing casing, else use budget casing
+                                    // If exists, update limit. If not (custom category with budget but no spend yet), create entry.
                                     if (!budgetMap[key]) budgetMap[key] = { name: b.category, spent: 0, limit: 0 };
                                     budgetMap[key].limit = b.amount;
                                 });
 
-                                const items = Object.values(budgetMap).sort((a, b) => b.spent - a.spent);
+                                const items = Object.values(budgetMap).sort((a, b) => {
+                                    // Custom sort: Put items with limits first, then by spent amount descending
+                                    if (a.limit > 0 && b.limit === 0) return -1;
+                                    if (a.limit === 0 && b.limit > 0) return 1;
+                                    return b.spent - a.spent;
+                                });
 
                                 if (items.length === 0) {
-                                    return <p className="text-text-secondary text-xs italic text-center py-4">Set a budget to get started.</p>;
+                                    return <p className="text-text-secondary text-xs italic text-center py-4">No categories found.</p>;
                                 }
 
                                 return items.map(item => {

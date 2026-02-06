@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
 import { X, Plus } from 'lucide-react';
+import { DEFAULT_CATEGORIES } from '../utils/constants';
 
 export default function BudgetModal({ isOpen, onClose, existingBudgets = [] }) {
     const [category, setCategory] = useState('');
@@ -31,8 +32,6 @@ export default function BudgetModal({ isOpen, onClose, existingBudgets = [] }) {
             period
         });
     };
-
-    const defaultCategories = ["Food", "Transport", "Shopping", "Entertainment", "Bills", "Health", "Misc"];
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -75,7 +74,7 @@ export default function BudgetModal({ isOpen, onClose, existingBudgets = [] }) {
                                 className="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-primary appearance-none"
                             >
                                 <option value="" disabled>Select a category</option>
-                                {defaultCategories.map(cat => (
+                                {DEFAULT_CATEGORIES.map(cat => (
                                     <option key={cat} value={cat}>{cat}</option>
                                 ))}
                             </select>
