@@ -14,4 +14,4 @@ COPY backend/ .
 
 # Railway provides a PORT environment variable
 ENV PORT=8000
-CMD alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+CMD python fix_migration.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
