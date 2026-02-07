@@ -23,17 +23,24 @@ export default function ProjectsPage() {
         queryFn: () => api.get('/projects').then(res => res.data)
     });
 
-    // Helper to Create Empty Project
     const createProject = useMutation({
-        mutationFn: (initialStatus) => api.post('/projects', {
-            name: 'New Project',
-            description: '',
-            status: initialStatus
-        }),
+        mutationFn: (initialStatus) => {
+            console.log("Attempting to create project with status:", initialStatus);
+            return api.post('/projects', {
+                name: 'New Project',
+                description: '',
+                status: initialStatus
+            });
+        },
         onSuccess: (newProject) => {
+            console.log("Project created successfully:", newProject);
             queryClient.invalidateQueries({ queryKey: ['projects'] });
             setSelectedProject(newProject);
             setIsModalOpen(true);
+        },
+        onError: (error) => {
+            console.error("Failed to create project:", error);
+            alert(`Failed to create project: ${error.response?.data?.detail || error.message}`);
         }
     });
 
