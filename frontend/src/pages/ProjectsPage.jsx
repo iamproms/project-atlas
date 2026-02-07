@@ -20,7 +20,7 @@ export default function ProjectsPage() {
 
     const { data: projects = [] } = useQuery({
         queryKey: ['projects'],
-        queryFn: () => api.get('/projects').then(res => res.data)
+        queryFn: () => api.get('/projects/').then(res => res.data)
     });
 
     const createProject = useMutation({
