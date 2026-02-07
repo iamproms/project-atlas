@@ -42,6 +42,8 @@ async def create_project(
     db.add(db_project)
     await db.commit()
     await db.refresh(db_project)
+    # Explicitly set empty list to avoid async lazy load error in Pydantic
+    db_project.todos = []
     return db_project
 
 @router.get("/focus/{focus_date}", response_model=Optional[schemas.ProjectFocus])
