@@ -396,6 +396,7 @@ function FocusStudio() {
 
 function LibraryShelf() {
     const [isAdding, setIsAdding] = useState(false);
+    const [editingResource, setEditingResource] = useState(null);
     const queryClient = useQueryClient();
 
     const { data: resources = [] } = useQuery({
@@ -408,6 +409,14 @@ function LibraryShelf() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['resources'] });
             setIsAdding(false);
+        }
+    });
+
+    const updateResource = useMutation({
+        mutationFn: ({ id, data }) => api.patch(`/resources/${id}`, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['resources'] });
+            setEditingResource(null);
         }
     });
 
@@ -434,8 +443,22 @@ function LibraryShelf() {
                     <AddResourceForm onClose={() => setIsAdding(false)} onSubmit={createResource.mutate} />
                 )}
 
+                {editingResource && (
+                    <UpdateProgressModal
+                        resource={editingResource}
+                        onClose={() => setEditingResource(null)}
+                        onSubmit={(data) => updateResource.mutate({ id: editingResource.id, data })}
+                    />
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {active.map(r => <ResourceCard key={r.id} resource={r} />)}
+                    {active.map(r => (
+                        <ResourceCard
+                            key={r.id}
+                            resource={r}
+                            onUpdateClick={() => setEditingResource(r)}
+                        />
+                    ))}
                     {active.length === 0 && !isAdding && (
                         <div className="col-span-full py-12 text-center text-text-secondary border border-dashed border-white/10 rounded-2xl">
                             No active resources. Pick something from the backlog!
@@ -450,7 +473,14 @@ function LibraryShelf() {
                     <Layers size={18} /> Up Next
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                    {backlog.map(r => <ResourceCard key={r.id} resource={r} compact />)}
+                    {backlog.map(r => (
+                        <ResourceCard
+                            key={r.id}
+                            resource={r}
+                            compact
+                            onUpdateClick={() => setEditingResource(r)}
+                        />
+                    ))}
                 </div>
             </section>
 
@@ -460,14 +490,21 @@ function LibraryShelf() {
                     <CheckCircle2 size={18} /> Finished
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                    {completed.map(r => <ResourceCard key={r.id} resource={r} compact />)}
+                    {completed.map(r => (
+                        <ResourceCard
+                            key={r.id}
+                            resource={r}
+                            compact
+                            onUpdateClick={() => setEditingResource(r)}
+                        />
+                    ))}
                 </div>
             </section>
         </div>
     );
 }
 
-function ResourceCard({ resource, compact }) {
+function ResourceCard({ resource, compact, onUpdateClick }) {
     const TypeIcon = RESOURCE_TYPES[resource.type]?.icon || Bookmark;
     const typeColor = RESOURCE_TYPES[resource.type]?.color || 'text-slate-400';
     const typeBg = RESOURCE_TYPES[resource.type]?.bg || 'bg-slate-400/10';
@@ -475,27 +512,30 @@ function ResourceCard({ resource, compact }) {
 
     if (compact) {
         return (
-            <div className="bg-surface border border-white/5 hover:border-white/10 p-4 rounded-xl transition-all group">
+            <div className="bg-surface border border-white/5 hover:border-white/10 p-4 rounded-xl transition-all group relative">
                 <div className="flex justify-between items-start mb-2">
                     <div className={`p-1.5 rounded-lg ${typeBg} ${typeColor}`}>
                         <TypeIcon size={14} />
                     </div>
-                    <button className="text-text-secondary hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                        <MoreVertical size={14} />
-                    </button>
                 </div>
                 <h3 className="font-bold text-sm text-text-primary line-clamp-1">{resource.title}</h3>
-                <p className="text-[10px] text-text-secondary mt-1">{resource.type}</p>
+                <p className="text-[10px] text-text-secondary mt-1">{resource.type} • {percent}%</p>
+
+                {/* Overlay Button */}
+                <button
+                    onClick={onUpdateClick}
+                    className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-xl"
+                >
+                    <span className="text-xs font-bold text-white border border-white/20 px-3 py-1 rounded-lg hover:bg-white hover:text-black transition-colors">
+                        Update
+                    </span>
+                </button>
             </div>
         );
     }
 
     return (
         <div className="bg-surface border border-white/5 p-6 rounded-2xl hover:border-primary/20 transition-all group relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button className="text-text-secondary hover:text-white"><MoreVertical size={16} /></button>
-            </div>
-
             <div className="flex gap-4 items-start mb-6">
                 <div className={`p-3 rounded-xl ${typeBg} ${typeColor}`}>
                     <TypeIcon size={24} />
@@ -519,12 +559,85 @@ function ResourceCard({ resource, compact }) {
             </div>
 
             <div className="flex justify-between items-end">
-                <button className="text-xs font-bold text-text-secondary hover:text-primary transition-colors">
+                <button
+                    onClick={onUpdateClick}
+                    className="text-xs font-bold text-text-secondary hover:text-primary transition-colors"
+                >
                     Update Progress
                 </button>
                 <div className="text-2xl font-bold text-white/10 group-hover:text-white/20 transition-colors">
                     {percent}%
                 </div>
+            </div>
+        </div>
+    );
+}
+
+function UpdateProgressModal({ resource, onClose, onSubmit }) {
+    const [progress, setProgress] = useState(resource.current_progress);
+    const [status, setStatus] = useState(resource.status);
+
+    // Auto-complete if progress >= total
+    const handleProgressChange = (val) => {
+        const valInt = parseInt(val) || 0;
+        setProgress(valInt);
+        if (valInt >= resource.total_progress && status !== 'completed') {
+            setStatus('completed');
+        }
+    };
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        onSubmit({ current_progress: progress, status });
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-surface border border-white/10 p-6 rounded-2xl w-full max-w-sm relative">
+                <button onClick={onClose} className="absolute top-4 right-4 text-text-secondary hover:text-white"><X size={18} /></button>
+
+                <h3 className="font-bold text-lg mb-1">Update Progress</h3>
+                <p className="text-xs text-text-secondary mb-6">{resource.title}</p>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="text-xs font-bold text-text-secondary uppercase mb-1 block">
+                            Current Progress ({resource.units})
+                        </label>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="number"
+                                className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 outline-none focus:border-primary text-xl font-bold"
+                                value={progress}
+                                onChange={e => handleProgressChange(e.target.value)}
+                                min="0"
+                                max={resource.units === '%' ? 100 : undefined}
+                                autoFocus
+                            />
+                            <span className="text-text-secondary font-bold">/ {resource.total_progress}</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold text-text-secondary uppercase mb-1 block">Status</label>
+                        <select
+                            className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 outline-none focus:border-primary"
+                            value={status}
+                            onChange={e => setStatus(e.target.value)}
+                        >
+                            <option value="active">Active</option>
+                            <option value="backlog">Up Next</option>
+                            <option value="completed">Completed</option>
+                            <option value="dropped">Dropped</option>
+                        </select>
+                    </div>
+
+                    <div className="pt-2">
+                        <button type="submit" className="w-full py-3 bg-primary text-background rounded-xl font-bold hover:brightness-110">
+                            Save Progress
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     );
