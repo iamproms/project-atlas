@@ -25,6 +25,7 @@ class User(Base):
     budgets: Mapped[List["Budget"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     todos: Mapped[List["Todo"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     learning_sessions: Mapped[List["LearningSession"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
+    resources: Mapped[List["Resource"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     workouts: Mapped[List["Workout"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
 
 class Habit(Base):
@@ -206,7 +207,35 @@ class LearningSession(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # Link to Resource
+    resource_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("resources.id"), nullable=True)
+    
     owner: Mapped["User"] = relationship(back_populates="learning_sessions")
+    resource: Mapped["Resource"] = relationship(back_populates="sessions")
+
+class Resource(Base):
+    __tablename__ = "resources"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    
+    title: Mapped[str] = mapped_column(String(255), index=True)
+    type: Mapped[str] = mapped_column(String(50)) # Book, Course, Video, Article, Project
+    status: Mapped[str] = mapped_column(String(50), default="backlog") # backlog, active, completed, dropped
+    
+    current_progress: Mapped[int] = mapped_column(default=0)
+    total_progress: Mapped[int] = mapped_column(default=100)
+    units: Mapped[str] = mapped_column(String(20), default="%") # pages, %, chapters, hours
+    
+    link: Mapped[Optional[str]] = mapped_column(String(500))
+    cover_image: Mapped[Optional[str]] = mapped_column(String(500))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    owner: Mapped["User"] = relationship(back_populates="resources")
+    sessions: Mapped[List["LearningSession"]] = relationship(back_populates="resource")
 
 class Workout(Base):
     __tablename__ = "workouts"

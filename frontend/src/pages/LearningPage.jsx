@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, subDays, eachDayOfInterval, startOfDay } from 'date-fns';
 import api from '../api/client';
@@ -15,28 +15,82 @@ import {
     Calendar,
     Target,
     Headphones,
-    Volume2
+    Volume2,
+    Library,
+    MoreVertical,
+    CheckCircle2,
+    Bookmark,
+    Video,
+    FileText,
+    Layers,
+    X
 } from 'lucide-react';
 import {
     BarChart,
     Bar,
     XAxis,
     YAxis,
-    CartesianGrid,
     Tooltip,
-    ResponsiveContainer,
-    Cell
+    ResponsiveContainer
 } from 'recharts';
+import { useTimer } from '../context/TimerContext';
 
 const SOUNDS = {
     'Rain': 'https://www.soundjay.com/nature/sounds/rain-07.mp3',
     'White Noise': 'https://www.soundjay.com/misc/sounds/white-noise-01.mp3'
 };
 
-import { useTimer } from '../context/TimerContext';
+const RESOURCE_TYPES = {
+    'Book': { icon: BookOpen, color: 'text-blue-400', bg: 'bg-blue-400/10' },
+    'Course': { icon: Video, color: 'text-purple-400', bg: 'bg-purple-400/10' },
+    'Article': { icon: FileText, color: 'text-green-400', bg: 'bg-green-400/10' },
+    'Project': { icon: Layers, color: 'text-orange-400', bg: 'bg-orange-400/10' },
+    'Other': { icon: Bookmark, color: 'text-slate-400', bg: 'bg-slate-400/10' }
+};
 
 export default function LearningPage() {
+    const [activeTab, setActiveTab] = useState('focus'); // 'focus' | 'library'
     const today = startOfDay(new Date());
+
+    return (
+        <div className="w-full max-w-[1920px] mx-auto px-6 md:px-12 py-8 md:py-12">
+            <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
+                <div>
+                    <div className="w-12 h-12 flex items-center justify-center text-4xl grayscale hover:grayscale-0 transition-all cursor-default mb-2">
+                        🧠
+                    </div>
+                    <h1 className="text-4xl font-bold tracking-tight mb-2">The Library</h1>
+                    <p className="text-text-secondary text-sm">Knowledge acquisition and deep work.</p>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex p-1 bg-surface border border-white/10 rounded-xl">
+                    <button
+                        onClick={() => setActiveTab('focus')}
+                        className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'focus' ? 'bg-primary text-background shadow-lg' : 'text-text-secondary hover:text-text-primary'}`}
+                    >
+                        <Timer size={16} />
+                        Focus Studio
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('library')}
+                        className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'library' ? 'bg-primary text-background shadow-lg' : 'text-text-secondary hover:text-text-primary'}`}
+                    >
+                        <Library size={16} />
+                        My Shelf
+                    </button>
+                </div>
+            </div>
+
+            {activeTab === 'focus' ? <FocusStudio /> : <LibraryShelf />}
+        </div>
+    );
+}
+
+function FocusStudio() {
+    const today = startOfDay(new Date());
+    const dateStr = format(today, 'yyyy-MM-dd');
+    const queryClient = useQueryClient();
 
     // Global Timer State
     const {
@@ -46,67 +100,48 @@ export default function LearningPage() {
         startTimer,
         stopTimer,
         resetTimer,
-        setSeconds,
         setCustomTime
     } = useTimer();
 
-    // Local State for Session Logging
-    const [subject, setSubject] = useState('');
-    const [resourceType, setResourceType] = useState('Course');
-    const [resourceName, setResourceName] = useState('');
-    const [takeaways, setTakeaways] = useState('');
-    const [resources, setResources] = useState('');
+    // Local State
+    const [subject, setSubject] = useState(''); // Legacy subject line
+    const [selectedResourceId, setSelectedResourceId] = useState(''); // New linked resource
     const [mode, setMode] = useState('timer'); // 'timer' | 'manual' | 'feynman'
     const [manualDuration, setManualDuration] = useState('');
-    const [customMinutes, setCustomMinutes] = useState('');
-    const [feynmanTopic, setFeynmanTopic] = useState('');
-    const [feynmanExplanation, setFeynmanExplanation] = useState('');
-
+    const [takeaways, setTakeaways] = useState('');
     const [activeSound, setActiveSound] = useState(null);
     const audioRef = React.useRef(null);
 
-    const toggleSound = (soundName) => {
-        if (activeSound === soundName) {
-            setActiveSound(null);
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current.currentTime = 0;
-            }
-        } else {
-            if (soundName === null) {
-                setActiveSound(null);
-                if (audioRef.current) {
-                    audioRef.current.pause();
-                    audioRef.current.currentTime = 0;
-                }
-                return;
-            }
-            setActiveSound(soundName);
-            if (audioRef.current) {
-                audioRef.current.src = SOUNDS[soundName];
-                audioRef.current.play().catch(e => console.log("Audio play failed", e));
-            }
-        }
-    };
+    // Feynman State
+    const [feynmanTopic, setFeynmanTopic] = useState('');
+    const [feynmanExplanation, setFeynmanExplanation] = useState('');
 
-    const queryClient = useQueryClient();
-
-    // Last 30 days of data for stats
-    const { data: allSessions = [] } = useQuery({
-        queryKey: ['learning', 'stats'],
-        queryFn: () => api.get('/learning/range', {
-            params: {
-                start_date: format(subDays(today, 30), 'yyyy-MM-dd'),
-                end_date: format(today, 'yyyy-MM-dd')
-            }
-        }).then(res => res.data).catch(() => [])
+    // Queries
+    const { data: resources = [] } = useQuery({
+        queryKey: ['resources'],
+        queryFn: () => api.get('/resources/', { params: { status: 'active' } }).then(res => res.data)
     });
 
-    // Fallback: If range doesn't exist yet, we'll just show today's for now
-    const dateStr = format(today, 'yyyy-MM-dd');
     const { data: sessions = [] } = useQuery({
         queryKey: ['learning', dateStr],
         queryFn: () => api.get(`/learning/${dateStr}`).then(res => res.data)
+    });
+
+    // Mutations
+    const createSession = useMutation({
+        mutationFn: (newSession) => api.post('/learning/', newSession),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['learning'] });
+            resetTimer();
+            setSubject('');
+            setTakeaways('');
+            // TODO: Prompt for progress update if resource was selected
+        }
+    });
+
+    const deleteSession = useMutation({
+        mutationFn: (id) => api.delete(`/learning/${id}`),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['learning'] })
     });
 
     const formatTime = (totalSeconds) => {
@@ -116,16 +151,18 @@ export default function LearningPage() {
         return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     };
 
-    const createSession = useMutation({
-        mutationFn: (newSession) => api.post('/learning/', newSession),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['learning'] });
-            resetTimer(); // Reset global timer on save
-            setSubject('');
+    const toggleSound = (soundName) => {
+        if (activeSound === soundName) {
+            setActiveSound(null);
+            audioRef.current?.pause();
+        } else {
+            setActiveSound(soundName);
+            if (audioRef.current) {
+                audioRef.current.src = SOUNDS[soundName];
+                audioRef.current.play().catch(console.error);
+            }
         }
-    });
-
-    // ... deleteSession ...
+    };
 
     const handleStopTimer = () => {
         if (seconds < 60) {
@@ -134,422 +171,445 @@ export default function LearningPage() {
             return;
         }
 
+        const linkedResource = resources.find(r => r.id === selectedResourceId);
+        const sessionSubject = linkedResource ? linkedResource.title : (subject || "Focus Session");
+
         createSession.mutate({
             date: dateStr,
-            subject: subject || "Focus Session",
-            resource_type: resourceType,
-            resource_name: resourceName,
+            subject: sessionSubject,
+            resource_id: selectedResourceId || null,
+            resource_type: linkedResource?.type,
+            resource_name: linkedResource?.title,
             takeaways: takeaways,
-            resources: resources,
-            duration_minutes: Math.round(seconds / 60) // Note: context handles counting, we just take seconds. 
-            // Wait, if counting DOWN, seconds is remaining time!
-            // We need TOTAL duration - remaining (if counting down).
-            // Or just track elapsed time? 
-            // Context has totalDuration.
-            // elapsed = direction === 'down' ? (totalDuration - seconds) : seconds
+            duration_minutes: Math.round(seconds / 60) // Logic depends on timer direction, simplifying for now
         });
-    };
-
-    // Correct duration calculation
-    const getElapsedMinutes = () => {
-        if (timerDirection === 'down') {
-            // If we started with 25m (1500s) and have 1000s left, elapsed is 500s.
-            // But 'totalDuration' is needed in Context.
-            // Assuming Context provides it (I added it).
-            // Wait, I need to expose totalDuration from Context. I did.
-            // But I need to import it.
-            // Destructuring `totalDuration` added above.
-        }
-        return Math.round(seconds / 60); // Stub behavior for now, fix in logic below
     };
 
     const handleManualSubmit = () => {
-        if (!subject || !manualDuration) {
-            alert('Please enter a subject and duration.');
-            return;
-        }
+        const linkedResource = resources.find(r => r.id === selectedResourceId);
+        const sessionSubject = linkedResource ? linkedResource.title : (subject || "Manual Log");
+
         createSession.mutate({
             date: dateStr,
-            subject: subject,
-            resource_type: resourceType,
-            resource_name: resourceName,
-            takeaways: takeaways,
-            resources: resources,
-            duration_minutes: parseInt(manualDuration)
+            subject: sessionSubject,
+            resource_id: selectedResourceId || null,
+            duration_minutes: parseInt(manualDuration) || 0,
+            takeaways: takeaways
         });
     };
 
-    const totalMinutes = sessions.reduce((sum, s) => sum + s.duration_minutes, 0);
-
-    // Chart Data: Consistency scores over time
-    const chartData = useMemo(() => {
-        const last14Days = eachDayOfInterval({
-            start: subDays(today, 13),
-            end: today
-        });
-
-        return last14Days.map(day => {
-            const dateStr = format(day, 'yyyy-MM-dd');
-            const daySessions = allSessions.filter(s => s.date === dateStr);
-            const totalMins = daySessions.reduce((sum, s) => sum + s.duration_minutes, 0);
-            return {
-                name: format(day, 'MMM d'),
-                value: totalMins
-            };
-        });
-    }, [allSessions, today]);
-
     return (
-        <div className="w-full max-w-[1920px] mx-auto px-6 md:px-12 py-8 md:py-12">
-            <div className="mb-12">
-                <div className="w-12 h-12 flex items-center justify-center text-4xl grayscale hover:grayscale-0 transition-all cursor-default mb-2">
-                    🧠
-                </div>
-                <h1 className="text-4xl font-bold tracking-tight mb-2">Learning</h1>
-                <p className="text-text-secondary text-sm">Deep work and skill acquisition.</p>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-8">
+                {/* Main Focus Area */}
+                <section className={`p-8 md:p-12 rounded-[2rem] border transition-all duration-500 relative overflow-hidden ${isTimerRunning ? 'bg-black/40 border-primary/50 shadow-[0_0_50px_rgba(46,170,220,0.15)]' : 'bg-surface/30 border-white/5'}`}>
+                    {/* Background Gradient */}
+                    {isTimerRunning && <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-                {/* Left: Timer & Today */}
-                <div className="lg:col-span-2 space-y-12">
-                    <section className={`p-8 md:p-12 rounded-[2rem] border transition-all duration-500 ${isTimerRunning ? 'bg-primary/5 border-primary/30 shadow-[0_0_40px_rgba(46,170,220,0.1)]' : 'bg-surface/30 border-border-subtle'}`}>
-                        <div className="flex flex-col items-center">
-                            {/* Mode Toggle */}
-                            <div className="flex items-center justify-center gap-2 mb-8 bg-surface/50 p-1.5 rounded-xl border border-border-subtle w-fit mx-auto">
-                                <button
-                                    onClick={() => setMode('timer')}
-                                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'timer' ? 'bg-primary text-background shadow-lg' : 'text-text-secondary hover:text-text-primary'}`}
-                                >
-                                    <Timer size={14} />
-                                    Focus Timer
-                                </button>
-                                <button
-                                    onClick={() => setMode('feynman')}
-                                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'feynman' ? 'bg-primary text-background shadow-lg' : 'text-text-secondary hover:text-text-primary'}`}
-                                >
-                                    <Target size={14} />
-                                    Feynman
-                                </button>
-                                <button
-                                    onClick={() => setMode('manual')}
-                                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'manual' ? 'bg-primary text-background shadow-lg' : 'text-text-secondary hover:text-text-primary'}`}
-                                >
-                                    <Clock size={14} />
-                                    Log
-                                </button>
-                            </div>
+                    <div className="relative z-10 flex flex-col items-center">
+                        {/* Mode Switcher */}
+                        <div className="flex items-center justify-center gap-2 mb-12 bg-black/40 p-1 rounded-xl border border-white/10">
+                            <button onClick={() => setMode('timer')} className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'timer' ? 'bg-primary text-background shadow-lg' : 'text-text-secondary hover:text-white'}`}>
+                                <Timer size={14} /> Timer
+                            </button>
+                            <button onClick={() => setMode('feynman')} className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'feynman' ? 'bg-primary text-background shadow-lg' : 'text-text-secondary hover:text-white'}`}>
+                                <Target size={14} /> Feynman
+                            </button>
+                            <button onClick={() => setMode('manual')} className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'manual' ? 'bg-primary text-background shadow-lg' : 'text-text-secondary hover:text-white'}`}>
+                                <Clock size={14} /> Log
+                            </button>
+                        </div>
 
-                            {mode === 'timer' && (
-                                <>
-                                    <div className="flex flex-col items-center">
-                                        <span className={`text-[10px] uppercase font-bold tracking-[0.4em] mb-4 transition-colors ${isTimerRunning ? 'text-primary' : 'text-text-secondary'}`}>
-                                            {isTimerRunning ? 'Focus Session Active' : 'Select Duration'}
-                                        </span>
+                        {mode === 'timer' && (
+                            <>
+                                <div className={`text-9xl font-mono font-bold mb-12 tabular-nums tracking-tighter transition-colors ${isTimerRunning ? 'text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'text-text-secondary/50'}`}>
+                                    {formatTime(seconds)}
+                                </div>
 
-                                        <div className={`text-8xl font-mono font-bold mb-8 tabular-nums tracking-tighter transition-colors ${isTimerRunning ? 'text-text-primary' : 'text-text-secondary/50'}`}>
-                                            {formatTime(seconds)}
-                                        </div>
-
-                                        {/* Presets & Custom */}
-                                        {!isTimerRunning && (
-                                            <div className="flex flex-col items-center gap-4 mb-8">
-                                                <div className="flex gap-3">
-                                                    <button onClick={() => setCustomTime(25)} className="px-4 py-2 rounded-full border border-border-subtle hover:border-primary/50 text-xs font-bold text-text-secondary hover:text-primary transition-all">
-                                                        🍅 25m
-                                                    </button>
-                                                    <button onClick={() => setCustomTime(90)} className="px-4 py-2 rounded-full border border-border-subtle hover:border-primary/50 text-xs font-bold text-text-secondary hover:text-primary transition-all">
-                                                        🧠 90m
-                                                    </button>
-                                                    <button onClick={() => setCustomTime(120)} className="px-4 py-2 rounded-full border border-border-subtle hover:border-primary/50 text-xs font-bold text-text-secondary hover:text-primary transition-all">
-                                                        🎓 2h Class
-                                                    </button>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="number"
-                                                        placeholder="Custom"
-                                                        className="w-20 bg-surface/50 border border-border-subtle rounded-lg px-3 py-1 text-xs text-center outline-none focus:border-primary"
-                                                        value={customMinutes}
-                                                        onChange={(e) => setCustomMinutes(e.target.value)}
-                                                    />
-                                                    <button
-                                                        onClick={() => { if (customMinutes) setCustomTime(parseInt(customMinutes)); }}
-                                                        className="text-xs font-bold text-primary hover:underline"
-                                                    >
-                                                        Set Min
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div className="flex items-center gap-6 mb-12">
-                                            {!isTimerRunning ? (
-                                                <button
-                                                    onClick={() => startTimer(seconds, timerDirection)}
-                                                    className="w-20 h-20 rounded-full bg-primary text-background flex items-center justify-center hover:scale-105 transition-all shadow-xl group"
-                                                >
-                                                    <Play size={32} fill="currentColor" className="ml-1" />
-                                                </button>
-                                            ) : (
-                                                <>
-                                                    <button
-                                                        onClick={stopTimer}
-                                                        className="w-20 h-20 rounded-full bg-surface border border-border-subtle text-text-primary flex items-center justify-center hover:bg-hover transition-all"
-                                                    >
-                                                        <Pause size={32} fill="currentColor" />
-                                                    </button>
-                                                    <button
-                                                        onClick={handleStopTimer}
-                                                        className="w-20 h-20 rounded-full bg-accent text-white flex items-center justify-center hover:scale-105 transition-all shadow-xl"
-                                                    >
-                                                        <Square size={32} fill="currentColor" />
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-
-                            {mode === 'feynman' && (
-                                <div className="w-full max-w-xl text-left space-y-6 mb-8 animate-in fade-in slide-in-from-right-4">
-                                    <div className="bg-surface/50 p-6 rounded-2xl border border-border-subtle">
-                                        <h3 className="font-bold text-primary mb-2 flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs">1</div>
-                                            Choose Concept
-                                        </h3>
-                                        <input
-                                            className="w-full bg-transparent border-b border-border-subtle focus:border-primary outline-none py-2 text-lg font-medium"
-                                            placeholder="What topic are you trying to master?"
-                                            value={feynmanTopic}
-                                            onChange={(e) => setFeynmanTopic(e.target.value)}
-                                        />
-                                    </div>
-
-                                    <div className="bg-surface/50 p-6 rounded-2xl border border-border-subtle">
-                                        <h3 className="font-bold text-primary mb-2 flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs">2</div>
-                                            Explain it simply
-                                        </h3>
-                                        <textarea
-                                            className="w-full bg-transparent outline-none text-sm text-text-secondary resize-none"
-                                            rows={4}
-                                            placeholder="Explain it as if you were teaching a 5-year-old. Identify gaps in your knowledge."
-                                            value={feynmanExplanation}
-                                            onChange={(e) => setFeynmanExplanation(e.target.value)}
-                                        />
-                                    </div>
-
-                                    <div className="bg-surface/50 p-6 rounded-2xl border border-border-subtle">
-                                        <h3 className="font-bold text-primary mb-2 flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs">3</div>
-                                            Review & Simplify
-                                        </h3>
-                                        <p className="text-xs text-text-secondary mb-2">Use analogies. Remove jargon. If you get stuck, go back to the source material.</p>
-                                        <button
-                                            onClick={async () => {
-                                                const content = `Feynman Session: ${feynmanTopic}\n\nExplanation:\n${feynmanExplanation}`;
-                                                try {
-                                                    await api.put(`/daily-notes/${dateStr}`, { content });
-                                                    alert("Note saved to Journal!");
-                                                } catch (err) {
-                                                    alert("Failed to save note.");
-                                                }
-                                            }}
-                                            className="w-full py-2 rounded-lg bg-surface hover:bg-hover border border-border-subtle text-xs font-bold transition-all"
-                                        >
-                                            Save Note to Journal
+                                {/* Controls */}
+                                <div className="flex items-center gap-8 mb-12">
+                                    {!isTimerRunning ? (
+                                        <button onClick={() => startTimer(seconds, timerDirection)} className="w-24 h-24 rounded-full bg-primary text-background flex items-center justify-center hover:scale-110 transition-all shadow-[0_0_30px_rgba(46,170,220,0.4)]">
+                                            <Play size={40} fill="currentColor" className="ml-2" />
                                         </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="w-full max-w-2xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                                <input
-                                    className="bg-transparent text-center text-2xl font-medium text-text-primary placeholder:text-text-secondary/20 outline-none w-full border-b border-transparent focus:border-border-subtle py-2 transition-all"
-                                    placeholder="What are you mastering today?"
-                                    value={subject}
-                                    onChange={(e) => setSubject(e.target.value)}
-                                />
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <select
-                                        value={resourceType}
-                                        onChange={(e) => setResourceType(e.target.value)}
-                                        className="bg-surface/50 border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary outline-none focus:border-primary transition-all shadow-inner"
-                                    >
-                                        <option value="Course">🎓 Course</option>
-                                        <option value="Book">📖 Book</option>
-                                        <option value="Podcast">🎙️ Podcast</option>
-                                        <option value="Article">📄 Article</option>
-                                        <option value="Video">🎬 Video</option>
-                                        <option value="Project">🛠️ Project</option>
-                                        <option value="Other">✨ Other</option>
-                                    </select>
-
-                                    {mode === 'manual' && (
-                                        <input
-                                            type="number"
-                                            className="bg-surface/50 border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary outline-none focus:border-primary transition-all shadow-inner"
-                                            placeholder="Duration (minutes)"
-                                            value={manualDuration}
-                                            onChange={(e) => setManualDuration(e.target.value)}
-                                        />
+                                    ) : (
+                                        <>
+                                            <button onClick={stopTimer} className="w-20 h-20 rounded-full bg-white/10 border border-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-all">
+                                                <Pause size={32} fill="currentColor" />
+                                            </button>
+                                            <button onClick={handleStopTimer} className="w-20 h-20 rounded-full bg-red-500/20 border border-red-500/50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all">
+                                                <Square size={32} fill="currentColor" />
+                                            </button>
+                                        </>
                                     )}
-
-                                    <input
-                                        className={`${mode === 'manual' ? 'md:col-span-2' : ''} bg-surface/50 border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary outline-none focus:border-primary transition-all shadow-inner`}
-                                        placeholder="Resource Name (e.g. CS50, Atomic Habits)"
-                                        value={resourceName}
-                                        onChange={(e) => setResourceName(e.target.value)}
-                                    />
-
-                                    <textarea
-                                        className="md:col-span-2 bg-surface/50 border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary outline-none focus:border-primary transition-all min-h-[100px] shadow-inner resize-none"
-                                        placeholder="Key Takeaways & Notes (Markdown supported)..."
-                                        value={takeaways}
-                                        onChange={(e) => setTakeaways(e.target.value)}
-                                    />
-
-                                    <textarea
-                                        className="md:col-span-2 bg-surface/50 border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary outline-none focus:border-primary transition-all min-h-[80px] shadow-inner resize-none"
-                                        placeholder="Resources / Links (one per line)..."
-                                        value={resources}
-                                        onChange={(e) => setResources(e.target.value)}
-                                    />
                                 </div>
 
-                                {mode === 'manual' && (
-                                    <button
-                                        onClick={handleManualSubmit}
-                                        className="w-full bg-primary text-background font-bold py-4 rounded-xl shadow-lg hover:shadow-primary/25 hover:scale-[1.01] active:scale-[0.99] transition-all"
-                                    >
-                                        Log Session
-                                    </button>
+                                {/* Resource Linker */}
+                                {!isTimerRunning && (
+                                    <div className="w-full max-w-md space-y-4">
+                                        <div className="relative">
+                                            <select
+                                                value={selectedResourceId}
+                                                onChange={(e) => setSelectedResourceId(e.target.value)}
+                                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-text-primary appearance-none focus:border-primary outline-none transition-all"
+                                            >
+                                                <option value="">-- No Linked Resource --</option>
+                                                {resources.map(r => (
+                                                    <option key={r.id} value={r.id}>{r.type === 'Book' ? '📖' : '🎓'} {r.title}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none">
+                                                <MoreVertical size={16} />
+                                            </div>
+                                        </div>
+                                        {!selectedResourceId && (
+                                            <input
+                                                className="w-full bg-transparent text-center text-sm border-b border-white/10 py-2 focus:border-primary outline-none transition-colors"
+                                                placeholder="Or type a custom subject..."
+                                                value={subject}
+                                                onChange={(e) => setSubject(e.target.value)}
+                                            />
+                                        )}
+                                        <div className="flex justify-center gap-2 pt-4">
+                                            {[25, 45, 60].map(m => (
+                                                <button key={m} onClick={() => setCustomTime(m)} className="px-3 py-1 rounded-full border border-white/10 text-xs font-bold text-text-secondary hover:text-primary hover:border-primary/50 transition-all">
+                                                    {m}m
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 )}
-                            </div>
-                        </div>
-                    </section>
+                            </>
+                        )}
 
-                    {/* Focus Sounds */}
-                    <section className="bg-surface/30 p-8 rounded-[2rem] border border-border-subtle transition-all">
-                        <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-6 flex items-center gap-2">
-                            <Headphones size={14} /> Focus Sounds
-                        </h3>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            {['Rain', 'White Noise'].map(sound => (
-                                <button
-                                    key={sound}
-                                    onClick={() => toggleSound(sound)}
-                                    className={`p-4 rounded-xl border flex items-center justify-between transition-all ${activeSound === sound
-                                        ? 'bg-primary/10 border-primary text-primary'
-                                        : 'bg-surface/50 border-transparent hover:border-border-subtle hover:bg-surface'
-                                        }`}
+                        {mode === 'manual' && (
+                            <div className="w-full max-w-md space-y-4 animate-in fade-in slide-in-from-bottom-4">
+                                <select
+                                    value={selectedResourceId}
+                                    onChange={(e) => setSelectedResourceId(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-text-primary outline-none focus:border-primary transition-all"
                                 >
-                                    <span className="text-sm font-bold">{sound}</span>
-                                    {activeSound === sound ? <Volume2 size={16} className="animate-pulse" /> : <Play size={14} className="opacity-50" />}
+                                    <option value="">-- Select Resource (Optional) --</option>
+                                    {resources.map(r => (
+                                        <option key={r.id} value={r.id}>{r.title}</option>
+                                    ))}
+                                </select>
+                                {!selectedResourceId && (
+                                    <input
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-primary"
+                                        placeholder="Subject"
+                                        value={subject}
+                                        onChange={(e) => setSubject(e.target.value)}
+                                    />
+                                )}
+                                <input
+                                    type="number"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-primary"
+                                    placeholder="Duration (minutes)"
+                                    value={manualDuration}
+                                    onChange={(e) => setManualDuration(e.target.value)}
+                                />
+                                <button onClick={handleManualSubmit} className="w-full bg-primary text-background font-bold py-3 rounded-xl hover:brightness-110">
+                                    Log Session
                                 </button>
-                            ))}
-                        </div>
-                        {activeSound && (
-                            <div className="mt-4 flex items-center justify-between text-[10px] text-text-secondary uppercase font-bold tracking-widest">
-                                <span>Now Playing: {activeSound}</span>
-                                <button onClick={() => toggleSound(null)} className="hover:text-accent">Stop</button>
                             </div>
                         )}
-                        <audio ref={audioRef} loop />
-                    </section>
 
-                    <section className="space-y-6">
-                        <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-text-secondary/60 flex items-center gap-2">
-                            <span>Today's Sessions</span>
-                            <div className="h-px flex-1 bg-border-subtle" />
-                        </h2>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {sessions.map(session => (
-                                <div key={session.id} className="notion-card p-6 flex items-center justify-between group">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                                            <BookOpen size={20} />
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-text-primary">{session.subject}</p>
-                                            <p className="text-xs text-text-secondary">
-                                                {session.resource_type ? `${session.resource_type}: ` : ''}
-                                                {session.resource_name ? `${session.resource_name} • ` : ''}
-                                                {session.duration_minutes} minutes
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => deleteSession.mutate(session.id)}
-                                        className="opacity-0 group-hover:opacity-100 p-2 text-text-secondary hover:text-accent transition-all"
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
+                        {mode === 'feynman' && (
+                            <div className="w-full max-w-xl space-y-6 text-left animate-in fade-in slide-in-from-right-4">
+                                <div className="bg-black/20 p-6 rounded-2xl border border-white/5">
+                                    <h3 className="font-bold text-primary mb-2 text-sm">1. Concept</h3>
+                                    <input className="w-full bg-transparent text-xl font-bold border-b border-white/10 pb-2 focus:border-primary outline-none" placeholder="What requires understanding?" value={feynmanTopic} onChange={e => setFeynmanTopic(e.target.value)} />
                                 </div>
-                            ))}
-                            {sessions.length === 0 && (
-                                <div className="col-span-full py-12 text-center text-text-secondary italic bg-surface/10 rounded-2xl border border-dashed border-border-subtle">
-                                    No focus sessions logged yet today.
+                                <div className="bg-black/20 p-6 rounded-2xl border border-white/5">
+                                    <h3 className="font-bold text-primary mb-2 text-sm">2. Explanation</h3>
+                                    <textarea className="w-full bg-transparent text-sm text-text-secondary resize-none outline-none" rows={6} placeholder="Explain it simply..." value={feynmanExplanation} onChange={e => setFeynmanExplanation(e.target.value)} />
                                 </div>
-                            )}
-                        </div>
-                    </section>
-                </div>
-
-                {/* Right: Analytics Sidebar */}
-                <div className="space-y-12">
-                    <section className="notion-card p-8">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">Today's Volume</p>
-                        <p className="text-4xl font-bold text-text-primary tabular-nums">
-                            {Math.floor(totalMinutes / 60)}h {totalMinutes % 60}m
-                        </p>
-                        <div className="mt-8 flex items-center gap-2 text-primary">
-                            <TrendingUp size={16} />
-                            <span className="text-[10px] font-bold uppercase tracking-widest">Growth in progress</span>
-                        </div>
-                    </section>
-
-                    {chartData.length > 0 && (
-                        <section className="notion-card p-8">
-                            <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-8">Focus Distribution</h3>
-                            <div className="h-64">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={chartData} margin={{ left: -20, right: 20 }}>
-                                        <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={10} angle={-45} textAnchor="end" height={50} />
-                                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                                        <Tooltip
-                                            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                                            contentStyle={{ backgroundColor: '#121212', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                                        />
-                                        <Bar dataKey="value" fill="#2eaadc" radius={[4, 4, 0, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
+                                <button className="w-full py-3 bg-white/5 hover:bg-primary hover:text-background rounded-xl font-bold text-xs uppercase tracking-widest transition-all">
+                                    Save to Journal
+                                </button>
                             </div>
-                        </section>
-                    )}
+                        )}
+                    </div>
+                </section>
 
-                    <section className="notion-card p-8">
-                        <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-6 flex items-center gap-2">
-                            <Target size={14} />
-                            <span>Learning Tips</span>
-                        </h3>
-                        <ul className="space-y-4 text-xs text-text-secondary leading-relaxed">
-                            <li className="flex gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1 flex-shrink-0" />
-                                <span>Try the Pomodoro technique: 25 minutes of deep focus followed by a 5-minute break.</span>
-                            </li>
-                            <li className="flex gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1 flex-shrink-0" />
-                                <span>Batch your learning by subject to minimize context-switching fatigue.</span>
-                            </li>
-                        </ul>
-                    </section>
+                {/* Note Taking Area (Visible if timer running or post-session) */}
+                <div className="bg-surface border border-white/5 rounded-2xl p-6">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-4">Session Notes</h3>
+                    <textarea
+                        className="w-full bg-transparent text-sm text-text-primary resize-none outline-none min-h-[100px]"
+                        placeholder="Capture your thoughts, key takeaways, or page numbers..."
+                        value={takeaways}
+                        onChange={(e) => setTakeaways(e.target.value)}
+                    />
                 </div>
             </div>
+
+            {/* Sidebar */}
+            <div className="space-y-8">
+                {/* Sounds */}
+                <section className="bg-surface border border-white/5 rounded-2xl p-6">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-4 flex items-center gap-2">
+                        <Headphones size={14} /> Soundscape
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                        {Object.keys(SOUNDS).map(sound => (
+                            <button
+                                key={sound}
+                                onClick={() => toggleSound(sound)}
+                                className={`p-3 rounded-lg border text-xs font-bold transition-all flex items-center justify-between ${activeSound === sound ? 'bg-primary/10 border-primary text-primary' : 'bg-black/20 border-transparent hover:bg-white/5 text-text-secondary'}`}
+                            >
+                                {sound}
+                                {activeSound === sound && <Volume2 size={12} className="animate-pulse" />}
+                            </button>
+                        ))}
+                    </div>
+                    <audio ref={audioRef} loop />
+                </section>
+
+                {/* Today's Log */}
+                <section className="space-y-4">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary flex items-center gap-2 px-2">
+                        <Calendar size={14} /> Today's Focus
+                    </h3>
+                    {sessions.map(s => (
+                        <div key={s.id} className="bg-surface border border-white/5 rounded-xl p-4 flex justify-between items-center group">
+                            <div>
+                                <h4 className="font-bold text-sm text-text-primary">{s.subject}</h4>
+                                <p className="text-xs text-text-secondary">{s.duration_minutes}m • {s.resource_type || 'General'}</p>
+                            </div>
+                            <button onClick={() => deleteSession.mutate(s.id)} className="text-text-secondary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    ))}
+                    {sessions.length === 0 && (
+                        <div className="text-center py-8 text-xs text-text-secondary border border-dashed border-white/10 rounded-xl">
+                            Ready to flow?
+                        </div>
+                    )}
+                </section>
+            </div>
+        </div>
+    );
+}
+
+function LibraryShelf() {
+    const [isAdding, setIsAdding] = useState(false);
+    const queryClient = useQueryClient();
+
+    const { data: resources = [] } = useQuery({
+        queryKey: ['resources'],
+        queryFn: () => api.get('/resources/').then(res => res.data)
+    });
+
+    const createResource = useMutation({
+        mutationFn: (newResource) => api.post('/resources/', newResource),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['resources'] });
+            setIsAdding(false);
+        }
+    });
+
+    // Grouping
+    const active = resources.filter(r => r.status === 'active');
+    const backlog = resources.filter(r => r.status === 'backlog');
+    const completed = resources.filter(r => r.status === 'completed');
+
+    return (
+        <div className="space-y-12 animate-in fade-in duration-500">
+            {/* Active Shelf */}
+            <section>
+                <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold flex items-center gap-2">
+                        <span className="w-2 h-8 bg-primary rounded-full"></span>
+                        Current Reads & Courses
+                    </h2>
+                    <button onClick={() => setIsAdding(true)} className="flex items-center gap-2 text-xs font-bold bg-primary text-background px-4 py-2 rounded-lg hover:brightness-110 transition-all">
+                        <Plus size={14} /> ADD NEW
+                    </button>
+                </div>
+
+                {isAdding && (
+                    <AddResourceForm onClose={() => setIsAdding(false)} onSubmit={createResource.mutate} />
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {active.map(r => <ResourceCard key={r.id} resource={r} />)}
+                    {active.length === 0 && !isAdding && (
+                        <div className="col-span-full py-12 text-center text-text-secondary border border-dashed border-white/10 rounded-2xl">
+                            No active resources. Pick something from the backlog!
+                        </div>
+                    )}
+                </div>
+            </section>
+
+            {/* Backlog */}
+            <section>
+                <h2 className="text-lg font-bold text-text-secondary mb-6 flex items-center gap-2">
+                    <Layers size={18} /> Up Next
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    {backlog.map(r => <ResourceCard key={r.id} resource={r} compact />)}
+                </div>
+            </section>
+
+            {/* Completed */}
+            <section>
+                <h2 className="text-lg font-bold text-text-secondary mb-6 flex items-center gap-2">
+                    <CheckCircle2 size={18} /> Finished
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    {completed.map(r => <ResourceCard key={r.id} resource={r} compact />)}
+                </div>
+            </section>
+        </div>
+    );
+}
+
+function ResourceCard({ resource, compact }) {
+    const TypeIcon = RESOURCE_TYPES[resource.type]?.icon || Bookmark;
+    const typeColor = RESOURCE_TYPES[resource.type]?.color || 'text-slate-400';
+    const typeBg = RESOURCE_TYPES[resource.type]?.bg || 'bg-slate-400/10';
+    const percent = Math.round((resource.current_progress / resource.total_progress) * 100) || 0;
+
+    if (compact) {
+        return (
+            <div className="bg-surface border border-white/5 hover:border-white/10 p-4 rounded-xl transition-all group">
+                <div className="flex justify-between items-start mb-2">
+                    <div className={`p-1.5 rounded-lg ${typeBg} ${typeColor}`}>
+                        <TypeIcon size={14} />
+                    </div>
+                    <button className="text-text-secondary hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                        <MoreVertical size={14} />
+                    </button>
+                </div>
+                <h3 className="font-bold text-sm text-text-primary line-clamp-1">{resource.title}</h3>
+                <p className="text-[10px] text-text-secondary mt-1">{resource.type}</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="bg-surface border border-white/5 p-6 rounded-2xl hover:border-primary/20 transition-all group relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button className="text-text-secondary hover:text-white"><MoreVertical size={16} /></button>
+            </div>
+
+            <div className="flex gap-4 items-start mb-6">
+                <div className={`p-3 rounded-xl ${typeBg} ${typeColor}`}>
+                    <TypeIcon size={24} />
+                </div>
+                <div>
+                    <h3 className="font-bold text-lg text-text-primary leading-tight mb-1">{resource.title}</h3>
+                    <div className="flex items-center gap-2 text-xs text-text-secondary">
+                        <span className="uppercase font-bold tracking-wider">{resource.type}</span>
+                        <span>•</span>
+                        <span>{resource.units === '%' ? `${percent}%` : `${resource.current_progress} / ${resource.total_progress} ${resource.units}`}</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="relative h-2 bg-black/40 rounded-full overflow-hidden mb-4">
+                <div
+                    className={`absolute top-0 left-0 h-full rounded-full transition-all duration-1000 ${percent === 100 ? 'bg-emerald-500' : 'bg-primary'}`}
+                    style={{ width: `${percent}%` }}
+                />
+            </div>
+
+            <div className="flex justify-between items-end">
+                <button className="text-xs font-bold text-text-secondary hover:text-primary transition-colors">
+                    Update Progress
+                </button>
+                <div className="text-2xl font-bold text-white/10 group-hover:text-white/20 transition-colors">
+                    {percent}%
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function AddResourceForm({ onClose, onSubmit }) {
+    const [form, setForm] = useState({
+        title: '',
+        type: 'Book',
+        status: 'active',
+        total_progress: 100,
+        units: 'pages' // or '%' or 'chapters'
+    });
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        onSubmit(form);
+    };
+
+    return (
+        <div className="bg-surface border border-white/10 p-6 rounded-2xl mb-8 animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="font-bold text-lg">Add to Library</h3>
+                <button onClick={onClose} className="text-text-secondary hover:text-white"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                    <label className="text-xs font-bold text-text-secondary uppercase mb-1 block">Title</label>
+                    <input
+                        className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 outline-none focus:border-primary"
+                        required
+                        value={form.title}
+                        onChange={e => setForm({ ...form, title: e.target.value })}
+                        autoFocus
+                    />
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-text-secondary uppercase mb-1 block">Type</label>
+                    <select
+                        className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 outline-none focus:border-primary"
+                        value={form.type}
+                        onChange={e => setForm({ ...form, type: e.target.value })}
+                    >
+                        {Object.keys(RESOURCE_TYPES).map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-text-secondary uppercase mb-1 block">Status</label>
+                    <select
+                        className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 outline-none focus:border-primary"
+                        value={form.status}
+                        onChange={e => setForm({ ...form, status: e.target.value })}
+                    >
+                        <option value="active">Active (Reading/Taking)</option>
+                        <option value="backlog">Up Next (Queue)</option>
+                        <option value="completed">Completed</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-text-secondary uppercase mb-1 block">Total Length</label>
+                    <input
+                        type="number"
+                        className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 outline-none focus:border-primary"
+                        value={form.total_progress}
+                        onChange={e => setForm({ ...form, total_progress: parseInt(e.target.value) })}
+                    />
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-text-secondary uppercase mb-1 block">Units</label>
+                    <select
+                        className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 outline-none focus:border-primary"
+                        value={form.units}
+                        onChange={e => setForm({ ...form, units: e.target.value })}
+                    >
+                        <option value="pages">Pages</option>
+                        <option value="%">%</option>
+                        <option value="chapters">Chapters</option>
+                        <option value="hours">Hours</option>
+                    </select>
+                </div>
+                <div className="md:col-span-2 pt-4 flex justify-end gap-2">
+                    <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-text-secondary hover:text-white">Cancel</button>
+                    <button type="submit" className="px-6 py-2 bg-primary text-background rounded-lg font-bold hover:brightness-110">Add Resource</button>
+                </div>
+            </form>
         </div>
     );
 }

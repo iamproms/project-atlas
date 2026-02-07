@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Annotated
 from . import models, schemas, auth, database
-from .routers import habits, projects, daily_notes, expenses, search, budgets, todos, learning, workouts, user_data, ai
+from .routers import habits, projects, daily_notes, expenses, search, budgets, todos, learning, workouts, user_data, ai, resources
 from datetime import timedelta
 from jose import JWTError, jwt
 
@@ -63,6 +63,7 @@ app.include_router(learning.router)
 app.include_router(workouts.router)
 app.include_router(user_data.router)
 app.include_router(ai.router)
+app.include_router(resources.router)
 
 @app.post("/auth/login", response_model=schemas.Token)
 async def login(
