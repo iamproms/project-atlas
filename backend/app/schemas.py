@@ -290,6 +290,45 @@ class LearningSession(LearningSessionBase):
     id: UUID
     user_id: UUID
     created_at: datetime
+    resource_id: Optional[UUID] = None
+
+    class Config:
+        from_attributes = True
+
+# Resource Schemas
+class ResourceBase(BaseModel):
+    title: str = Field(..., max_length=255)
+    type: str # Book, Course, etc.
+    status: str = "backlog"
+    current_progress: int = 0
+    total_progress: int = 100
+    units: str = "%"
+    link: Optional[str] = None
+    cover_image: Optional[str] = None
+    notes: Optional[str] = None
+
+class ResourceCreate(ResourceBase):
+    pass
+
+class ResourceUpdate(BaseModel):
+    title: Optional[str] = None
+    type: Optional[str] = None
+    status: Optional[str] = None
+    current_progress: Optional[int] = None
+    total_progress: Optional[int] = None
+    units: Optional[str] = None
+    link: Optional[str] = None
+    cover_image: Optional[str] = None
+    notes: Optional[str] = None
+
+class Resource(ResourceBase):
+    id: UUID
+    user_id: UUID
+    created_at: datetime
+    updated_at: datetime
+    
+    # We can't easily include sessions list here due to circular reference without careful string typing
+    # sessions: List[LearningSession] = [] 
 
     class Config:
         from_attributes = True
