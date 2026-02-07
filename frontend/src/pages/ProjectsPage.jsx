@@ -26,7 +26,7 @@ export default function ProjectsPage() {
     const createProject = useMutation({
         mutationFn: (initialStatus) => {
             console.log("Attempting to create project with status:", initialStatus);
-            return api.post('/projects', {
+            return api.post('/projects/', {
                 name: 'New Project',
                 description: '',
                 status: initialStatus
