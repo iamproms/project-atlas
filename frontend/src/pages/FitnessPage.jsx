@@ -106,6 +106,7 @@ export default function FitnessPage() {
             setIsAdding(false);
             setExercises([]);
             setWorkoutType('');
+            setLastSets({});
         }
     });
 
@@ -115,9 +116,23 @@ export default function FitnessPage() {
     });
 
     // Helpers
+    const fetchLastSet = async (name, index) => {
+        if (!name) return;
+        try {
+            const res = await api.get(`/workouts/exercises/last/${encodeURIComponent(name)}`);
+            if (res.data) {
+                setLastSets(prev => ({ ...prev, [index]: res.data }));
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
     const loadTemplate = (source, name) => {
         setWorkoutType(name);
         setExercises(source[name]);
+        // Prefetch history for template exercises
+        source[name].forEach((ex, i) => fetchLastSet(ex.exercise_name, i));
         setIsAdding(true);
     };
 
@@ -125,6 +140,12 @@ export default function FitnessPage() {
         const newEx = [...exercises];
         newEx[index][field] = value;
         setExercises(newEx);
+
+        // Debounce fetching functionality or just fetch on meaningful change
+        if (field === 'exercise_name' && value.length > 2) {
+            const timeoutId = setTimeout(() => fetchLastSet(value, index), 500);
+            return () => clearTimeout(timeoutId);
+        }
     };
 
     const addExerciseRow = () => {
@@ -220,18 +241,35 @@ export default function FitnessPage() {
                                     autoFocus
                                 />
                                 <div className="space-y-3">
+                                    <div className="flex gap-3 px-2 mb-1">
+                                        <div className="flex-1 text-[10px] font-bold text-text-secondary uppercase tracking-wider">Exercise</div>
+                                        <div className="w-[140px] flex gap-2 text-[10px] font-bold text-text-secondary uppercase tracking-wider justify-center">
+                                            <span>Weight</span>
+                                            <span className="w-4"></span>
+                                            <span>Reps</span>
+                                        </div>
+                                        <div className="w-8"></div>
+                                    </div>
                                     {exercises.map((ex, i) => (
                                         <div key={i} className="flex gap-3 items-center group">
-                                            <input
-                                                className="flex-1 bg-white/5 rounded-lg px-4 py-3 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-text-secondary/30"
-                                                placeholder="Exercise Name"
-                                                value={ex.exercise_name}
-                                                onChange={(e) => updateExercise(i, 'exercise_name', e.target.value)}
-                                            />
-                                            <div className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-3">
+                                            <div className="flex-1">
+                                                <input
+                                                    className="w-full bg-white/5 rounded-lg px-4 py-3 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-text-secondary/30"
+                                                    placeholder="Exercise Name"
+                                                    value={ex.exercise_name}
+                                                    onChange={(e) => updateExercise(i, 'exercise_name', e.target.value)}
+                                                />
+                                                {lastSets[i] && (
+                                                    <div className="flex items-center gap-2 mt-1 ml-2 text-[10px] text-primary uppercase font-bold tracking-widest animate-in fade-in slide-in-from-left-2">
+                                                        <History size={10} />
+                                                        Last: {lastSets[i].weight > 0 ? `${lastSets[i].weight}kg` : 'BW'} × {lastSets[i].reps}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-3 w-[140px] justify-center h-[46px] self-start">
                                                 <input
                                                     type="number"
-                                                    className="w-16 bg-transparent text-center font-bold outline-none"
+                                                    className={`w-14 bg-transparent text-center font-bold outline-none ${ex.weight === 0 || ex.weight === '' ? 'text-text-secondary/50' : 'text-text-primary'}`}
                                                     placeholder="kg"
                                                     value={ex.weight}
                                                     onChange={(e) => updateExercise(i, 'weight', e.target.value)}
@@ -240,12 +278,12 @@ export default function FitnessPage() {
                                                 <input
                                                     type="number"
                                                     className="w-12 bg-transparent text-center font-bold outline-none"
-                                                    placeholder="reps"
+                                                    placeholder={ex.exercise_name.toLowerCase().includes('sec') ? "sec" : "reps"}
                                                     value={ex.reps}
                                                     onChange={(e) => updateExercise(i, 'reps', e.target.value)}
                                                 />
                                             </div>
-                                            <button type="button" onClick={() => removeExerciseRow(i)} className="p-2 text-text-secondary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button type="button" onClick={() => removeExerciseRow(i)} className="p-2 text-text-secondary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity self-start mt-1">
                                                 <Trash2 size={16} />
                                             </button>
                                         </div>
