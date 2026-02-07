@@ -126,10 +126,13 @@ async def update_project(
 ):
     import uuid
     uid = uuid.UUID(project_id)
+    from sqlalchemy.orm import selectinload
     result = await db.execute(
-        select(models.Project).where(
+        select(models.Project)
+        .where(
             and_(models.Project.id == uid, models.Project.user_id == current_user.id)
         )
+        .options(selectinload(models.Project.todos))
     )
     db_project = result.scalar_one_or_none()
     if not db_project:
