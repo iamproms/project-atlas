@@ -45,6 +45,28 @@ const ROUTINE_TEMPLATES = {
     ]
 };
 
+const CALISTHENICS_TEMPLATES = {
+    'Full Body BW': [
+        { exercise_name: 'Pushups', weight: 0, reps: '', order: 0 },
+        { exercise_name: 'Bodyweight Squats', weight: 0, reps: '', order: 1 },
+        { exercise_name: 'Lunges', weight: 0, reps: '', order: 2 },
+        { exercise_name: 'Plank (Secs)', weight: 0, reps: '', order: 3 },
+        { exercise_name: 'Mountain Climbers', weight: 0, reps: '', order: 4 }
+    ],
+    'Core Blast': [
+        { exercise_name: 'Crunches', weight: 0, reps: '', order: 0 },
+        { exercise_name: 'Leg Raises', weight: 0, reps: '', order: 1 },
+        { exercise_name: 'Plank (Secs)', weight: 0, reps: '', order: 2 },
+        { exercise_name: 'Russian Twists', weight: 0, reps: '', order: 3 }
+    ],
+    'HIIT Home': [
+        { exercise_name: 'Burpees', weight: 0, reps: '', order: 0 },
+        { exercise_name: 'Jump Squats', weight: 0, reps: '', order: 1 },
+        { exercise_name: 'High Knees', weight: 0, reps: '', order: 2 },
+        { exercise_name: 'Pushups', weight: 0, reps: '', order: 3 }
+    ]
+};
+
 export default function FitnessPage() {
     const today = startOfDay(new Date());
     const dateStr = format(today, 'yyyy-MM-dd');
@@ -93,9 +115,9 @@ export default function FitnessPage() {
     });
 
     // Helpers
-    const loadTemplate = (name) => {
+    const loadTemplate = (source, name) => {
         setWorkoutType(name);
-        setExercises(ROUTINE_TEMPLATES[name]);
+        setExercises(source[name]);
         setIsAdding(true);
     };
 
@@ -142,19 +164,34 @@ export default function FitnessPage() {
                         <p className="text-text-secondary text-sm">Consistency is the only magic pill.</p>
                     </div>
                     {!isAdding && (
-                        <div className="flex gap-2">
-                            {Object.keys(ROUTINE_TEMPLATES).map(type => (
-                                <button
-                                    key={type}
-                                    onClick={() => loadTemplate(type)}
-                                    className="hidden md:block px-3 py-1.5 rounded-lg bg-surface border border-white/5 text-xs font-bold text-text-secondary hover:text-primary hover:border-primary/30 transition-all"
-                                >
-                                    {type}
-                                </button>
-                            ))}
+                        <div className="flex flex-col gap-4 items-end">
+                            <div className="flex gap-2 flex-wrap justify-end">
+                                <span className="text-[10px] uppercase font-bold text-text-secondary self-center mr-2">Gym</span>
+                                {Object.keys(ROUTINE_TEMPLATES).map(type => (
+                                    <button
+                                        key={type}
+                                        onClick={() => loadTemplate(ROUTINE_TEMPLATES, type)}
+                                        className="px-3 py-1.5 rounded-lg bg-surface border border-white/5 text-xs font-bold text-text-secondary hover:text-primary hover:border-primary/30 transition-all"
+                                    >
+                                        {type}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex gap-2 flex-wrap justify-end">
+                                <span className="text-[10px] uppercase font-bold text-text-secondary self-center mr-2">Home</span>
+                                {Object.keys(CALISTHENICS_TEMPLATES).map(type => (
+                                    <button
+                                        key={type}
+                                        onClick={() => loadTemplate(CALISTHENICS_TEMPLATES, type)}
+                                        className="px-3 py-1.5 rounded-lg bg-surface border border-white/5 text-xs font-bold text-text-secondary hover:text-emerald-400 hover:border-emerald-400/30 transition-all"
+                                    >
+                                        {type}
+                                    </button>
+                                ))}
+                            </div>
                             <button
                                 onClick={() => { setIsAdding(true); setWorkoutType(''); setExercises([{ exercise_name: '', weight: '', reps: '', order: 0 }]); }}
-                                className="bg-primary text-background px-6 py-2 rounded-xl text-sm font-bold shadow-lg hover:brightness-110 transition-all ml-2"
+                                className="bg-primary text-background px-6 py-2 rounded-xl text-sm font-bold shadow-lg hover:brightness-110 transition-all"
                             >
                                 Log Custom
                             </button>
@@ -244,7 +281,12 @@ export default function FitnessPage() {
                                         {workout.sets.map(set => (
                                             <div key={set.id} className="flex justify-between text-sm border-b border-white/5 pb-1 last:border-0 last:pb-0">
                                                 <span className="text-text-secondary">{set.exercise_name}</span>
-                                                <span className="font-mono font-bold text-text-primary">{set.weight}<span className="text-xs text-text-secondary font-sans ml-0.5">kg</span> × {set.reps}</span>
+                                                <span className="font-mono font-bold text-text-primary">
+                                                    {set.weight > 0 ? set.weight : 'BW'}
+                                                    {set.weight > 0 && <span className="text-xs text-text-secondary font-sans ml-0.5">kg</span>}
+                                                    <span className="text-xs text-text-secondary mx-2">×</span>
+                                                    {set.reps}
+                                                </span>
                                             </div>
                                         ))}
                                     </div>

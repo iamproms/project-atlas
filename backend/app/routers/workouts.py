@@ -49,6 +49,41 @@ async def get_workouts_range(
     )
     return result.scalars().all()
 
+@router.get("/stats/heatmap")
+async def get_workout_heatmap(
+    db: AsyncSession = Depends(database.get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
+):
+    from sqlalchemy import func
+    # Count workouts per day
+    result = await db.execute(
+        select(models.Workout.date, func.count(models.Workout.id))
+        .where(models.Workout.user_id == current_user.id)
+        .group_by(models.Workout.date)
+    )
+    return [{"date": row[0], "count": row[1]} for row in result.all()]
+
+@router.get("/stats/prs")
+async def get_personal_records(
+    db: AsyncSession = Depends(database.get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
+):
+    from sqlalchemy import func
+    # Get max weight per exercise
+    stmt = (
+        select(
+            models.ExerciseSet.exercise_name,
+            func.max(models.ExerciseSet.weight).label("max_weight")
+        )
+        .join(models.Workout)
+        .where(models.Workout.user_id == current_user.id)
+        .group_by(models.ExerciseSet.exercise_name)
+        .order_by(func.max(models.ExerciseSet.weight).desc())
+        .limit(10) # Top 10 exercises by weight
+    )
+    result = await db.execute(stmt)
+    return [{"exercise": row[0], "weight": row[1]} for row in result.all()]
+
 @router.post("/", response_model=schemas.Workout)
 async def create_workout(
     workout_in: schemas.WorkoutCreate,
