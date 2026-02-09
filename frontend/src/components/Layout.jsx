@@ -136,9 +136,38 @@ export default function Layout({ children }) {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-y-auto w-full">
+            <main className="flex-1 overflow-y-auto w-full pb-20 md:pb-0">
                 {children}
             </main>
+
+            {/* Mobile Bottom Navigation */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-surface/90 backdrop-blur-lg border-t border-white/10 px-6 py-4 flex justify-between items-center z-50 safe-area-bottom">
+                {navItems.slice(0, 5).map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location.pathname === item.path;
+                    return (
+                        <Link
+                            key={item.path}
+                            to={item.path}
+                            className={`flex flex-col items-center gap-1 transition-colors ${isActive ? 'text-primary' : 'text-text-secondary hover:text-white'}`}
+                        >
+                            <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
+                            <span className="text-[10px] font-medium">{item.label}</span>
+                        </Link>
+                    )
+                })}
+                <button
+                    onClick={() => setIsSidebarOpen(true)} // Re-using this state logic might be tricky, better to just show a "More" menu or link to Profile
+                    className="flex flex-col items-center gap-1 text-text-secondary"
+                >
+                    <Link to="/profile">
+                        <div className="w-6 h-6 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-[10px] font-bold text-background uppercase">
+                            {(user?.full_name || 'U').charAt(0)}
+                        </div>
+                        <span className="text-[10px] font-medium">Profile</span>
+                    </Link>
+                </button>
+            </div>
         </div>
     );
 }
