@@ -141,33 +141,116 @@ export default function Layout({ children }) {
             </main>
 
             {/* Mobile Bottom Navigation */}
-            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-surface/90 backdrop-blur-lg border-t border-white/10 px-6 py-4 flex justify-between items-center z-50 safe-area-bottom">
-                {navItems.slice(0, 5).map((item) => {
+            <MobileNav
+                user={user}
+                toggleTheme={toggleTheme}
+                logout={logout}
+                theme={theme}
+                navItems={navItems}
+            />
+        </div>
+    );
+}
+
+function MobileNav({ user, toggleTheme, logout, theme, navItems }) {
+    const location = useLocation();
+    const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+
+    // Priorities for Bottom Bar
+    const mainNav = [
+        navItems.find(i => i.path === '/'), // Today
+        navItems.find(i => i.path === '/tasks'),
+        navItems.find(i => i.path === '/habits'),
+        navItems.find(i => i.path === '/vision'),
+    ].filter(Boolean);
+
+    // Other items for the drawer
+    const drawerItems = navItems.filter(item => !mainNav.find(m => m.path === item.path));
+
+    return (
+        <>
+            {/* Drawer Overlay */}
+            {isMenuOpen && (
+                <div
+                    className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in duration-200"
+                    onClick={() => setIsMenuOpen(false)}
+                />
+            )}
+
+            {/* Drawer Content */}
+            <div className={`md:hidden fixed bottom-[72px] left-4 right-4 bg-surface border border-white/10 rounded-2xl p-4 z-50 transition-all duration-300 transform ${isMenuOpen ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                    {drawerItems.map((item) => {
+                        const Icon = item.icon;
+                        const isActive = location.pathname === item.path;
+                        return (
+                            <Link
+                                key={item.path}
+                                to={item.path}
+                                onClick={() => setIsMenuOpen(false)}
+                                className={`flex flex-col items-center gap-2 p-3 rounded-xl transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'hover:bg-hover text-text-secondary'}`}
+                            >
+                                <Icon size={24} />
+                                <span className="text-[10px] font-medium text-center">{item.label}</span>
+                            </Link>
+                        )
+                    })}
+                </div>
+
+                <div className="border-t border-white/5 pt-4 flex justify-between">
+                    <button
+                        onClick={toggleTheme}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-text-secondary hover:bg-hover hover:text-text-primary transition-colors"
+                    >
+                        {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                        <span>Theme</span>
+                    </button>
+                    <button
+                        onClick={logout}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-text-secondary hover:bg-hover hover:text-red-400 transition-colors"
+                    >
+                        <LogOut size={18} />
+                        <span>Logout</span>
+                    </button>
+                    <Link
+                        to="/profile"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-text-secondary hover:bg-hover hover:text-primary transition-colors"
+                    >
+                        <UserIcon size={18} />
+                        <span>Profile</span>
+                    </Link>
+                </div>
+            </div>
+
+            {/* Bottom Bar */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur-xl border-t border-white/10 px-6 py-3 flex justify-between items-center z-50 safe-area-bottom h-[72px]">
+                {mainNav.map((item) => {
                     const Icon = item.icon;
                     const isActive = location.pathname === item.path;
                     return (
                         <Link
                             key={item.path}
                             to={item.path}
-                            className={`flex flex-col items-center gap-1 transition-colors ${isActive ? 'text-primary' : 'text-text-secondary hover:text-white'}`}
+                            onClick={() => setIsMenuOpen(false)}
+                            className={`flex flex-col items-center gap-1 transition-colors ${isActive ? 'text-primary' : 'text-text-secondary active:text-white'}`}
                         >
                             <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
                             <span className="text-[10px] font-medium">{item.label}</span>
                         </Link>
                     )
                 })}
+
                 <button
-                    onClick={() => setIsSidebarOpen(true)} // Re-using this state logic might be tricky, better to just show a "More" menu or link to Profile
-                    className="flex flex-col items-center gap-1 text-text-secondary"
+                    onClick={() => setIsMenuOpen(!isMenuOpen)}
+                    className={`flex flex-col items-center gap-1 transition-colors ${isMenuOpen ? 'text-primary' : 'text-text-secondary active:text-white'}`}
                 >
-                    <Link to="/profile">
-                        <div className="w-6 h-6 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-[10px] font-bold text-background uppercase">
-                            {(user?.full_name || 'U').charAt(0)}
-                        </div>
-                        <span className="text-[10px] font-medium">Profile</span>
-                    </Link>
+                    <div className="w-6 h-6 flex items-center justify-center">
+                        <Menu size={24} strokeWidth={isMenuOpen ? 2.5 : 2} />
+                    </div>
+                    <span className="text-[10px] font-medium">More</span>
                 </button>
             </div>
-        </div>
+        </>
     );
 }
