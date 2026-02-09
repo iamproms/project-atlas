@@ -373,3 +373,30 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str = Field(..., min_length=8)
+
+# Vision Schemas
+class VisionItemBase(BaseModel):
+    type: str # IMAGE, TEXT, GOAL, ANTI_VISION
+    content: str
+    section: str # NORTH_STAR, QUARTERLY, VISUAL_BOARD
+    target_date: Optional[date] = None
+    is_achieved: bool = False
+    order: int = 0
+
+class VisionItemCreate(VisionItemBase):
+    pass
+
+class VisionItemUpdate(BaseModel):
+    content: Optional[str] = None
+    section: Optional[str] = None
+    target_date: Optional[date] = None
+    is_achieved: Optional[bool] = None
+    order: Optional[int] = None
+
+class VisionItem(VisionItemBase):
+    id: UUID
+    user_id: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

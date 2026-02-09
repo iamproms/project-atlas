@@ -27,6 +27,7 @@ class User(Base):
     learning_sessions: Mapped[List["LearningSession"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     resources: Mapped[List["Resource"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     workouts: Mapped[List["Workout"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
+    vision_items: Mapped[List["VisionItem"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
 
 class Habit(Base):
     __tablename__ = "habits"
@@ -262,3 +263,23 @@ class ExerciseSet(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     workout: Mapped["Workout"] = relationship(back_populates="sets")
+
+class VisionItem(Base):
+    __tablename__ = "vision_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    
+    type: Mapped[str] = mapped_column(String(50)) # IMAGE, TEXT, GOAL, ANTI_VISION
+    content: Mapped[str] = mapped_column(Text) # Image URL or Text content
+    section: Mapped[str] = mapped_column(String(50)) # NORTH_STAR, QUARTERLY, VISUAL_BOARD
+    
+    # Optional fields for goals
+    target_date: Mapped[Optional[date]] = mapped_column(Date)
+    is_achieved: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # Metadata
+    order: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    owner: Mapped["User"] = relationship(back_populates="vision_items")
