@@ -26,8 +26,7 @@ async def upload_file(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # Return the URL (assuming local development for now, would need full URL in prod)
-        # We will mount /static to UPLOAD_DIR
-        return {"url": f"http://localhost:8000/static/{unique_filename}"}
+        # Return relative path
+        return {"url": f"/static/{unique_filename}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

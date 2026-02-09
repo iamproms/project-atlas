@@ -1,11 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '../api/client';
+import api, { baseURL } from '../api/client';
 import { Plus, Image as ImageIcon, Trash2, Calendar, Edit3, X, Save, Eye, EyeOff, Target, ArrowUpRight, MonitorPlay, User, Maximize2, Upload, FileText } from 'lucide-react';
 import { differenceInDays, format } from 'date-fns';
 
 const DEFAULT_MISSION = "Draft your life mission. What is the one thing you must accomplish before you die?";
 const DEFAULT_ANTI_VISION = "Describe the hell you are running from. The version of you that gave up.";
+
+// Helper to resolve image URLs
+const getImageUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http') || url.startsWith('blob:')) return url;
+    return `${baseURL}${url}`;
+};
+
+const DEFAULT_INSPIRATIONS = [
+    { id: 'def1', content: 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=1000&auto=format&fit=crop', isDefault: true },
+    { id: 'def2', content: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1000&auto=format&fit=crop', isDefault: true },
+    { id: 'def3', content: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=1000&auto=format&fit=crop', isDefault: true },
+];
 
 export default function VisionBoardPage() {
     const queryClient = useQueryClient();
@@ -23,7 +36,14 @@ export default function VisionBoardPage() {
 
     const createItem = useMutation({
         mutationFn: api.createVisionItem,
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['vision'] })
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['vision'] });
+            setIsEditingMission(false);
+        },
+        onError: (err) => {
+            console.error("Failed to create vision item:", err);
+            alert("Failed to save. Please try again.");
+        }
     });
 
     const updateItem = useMutation({
@@ -31,6 +51,10 @@ export default function VisionBoardPage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['vision'] });
             setIsEditingMission(false);
+        },
+        onError: (err) => {
+            console.error("Failed to update vision item:", err);
+            alert("Failed to save. Please try again.");
         }
     });
 
@@ -51,19 +75,25 @@ export default function VisionBoardPage() {
     const quarterly = items.filter(i => i.section === 'QUARTERLY').sort((a, b) => a.order - b.order);
     const identity = items.filter(i => i.section === 'IDENTITY').sort((a, b) => a.order - b.order);
     const antiVision = items.find(i => i.section === 'ANTI_VISION') || { content: DEFAULT_ANTI_VISION };
-    const visualBoard = items.filter(i => i.section === 'VISUAL_BOARD');
+    const visualBoardItems = items.filter(i => i.section === 'VISUAL_BOARD');
+
+    // Combine user items with defaults if user has no items
+    const visualBoard = visualBoardItems.length > 0 ? visualBoardItems : DEFAULT_INSPIRATIONS;
 
     // Countdown Logic
     const targetDate = new Date('2027-01-01');
     const daysLeft = differenceInDays(targetDate, new Date());
 
     const handleSaveMission = () => {
+        const textToSave = missionText.trim();
+        if (!textToSave) return;
+
         if (northStar.id) {
-            updateItem.mutate({ id: northStar.id, data: { content: missionText } });
+            updateItem.mutate({ id: northStar.id, data: { content: textToSave } });
         } else {
             createItem.mutate({
                 type: 'TEXT',
-                content: missionText,
+                content: textToSave,
                 section: 'NORTH_STAR',
                 order: 0
             });
@@ -159,8 +189,9 @@ export default function VisionBoardPage() {
                                 <button
                                     onMouseDown={(e) => e.preventDefault()} // Prevent blur from triggering before click
                                     onClick={() => {
-                                        if (isEditingMission) handleSaveMission();
-                                        else {
+                                        if (isEditingMission) {
+                                            handleSaveMission();
+                                        } else {
                                             setMissionText(northStar.content);
                                             setIsEditingMission(true);
                                         }
@@ -321,10 +352,17 @@ function QuarterlyColumn({ quarter, items, createItem, updateItem, uploadImage }
         <div className="h-full bg-surface border border-white/5 rounded-2xl flex flex-col overflow-hidden group hover:border-primary/20 transition-all">
             {/* Image Header */}
             <div className={`h-48 relative bg-black/50 group-hover:h-56 transition-all duration-500 shrink-0`}>
-                <img
-                    src={data.image || `https://via.placeholder.com/600x400?text=${quarter.id}`}
-                    className="w-full h-full object-cover"
-                />
+                {data.image ? (
+                    <img
+                        src={getImageUrl(data.image)}
+                        className="w-full h-full object-cover"
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-white/5 text-white/20">
+                        <ImageIcon size={32} />
+                    </div>
+                )}
+
                 <div className="absolute inset-0 bg-gradient-to-t from-surface to-transparent" />
                 <div className="absolute bottom-4 left-4">
                     <h3 className="text-4xl font-black text-white">{quarter.id}</h3>
@@ -469,17 +507,19 @@ function VisualBoard({ items, createItem, deleteItem, uploadImage }) {
                 {items.map(item => (
                     <div key={item.id} className="break-inside-avoid relative group rounded-2xl overflow-hidden bg-surface mb-4">
                         <img
-                            src={item.content}
+                            src={getImageUrl(item.content)}
                             alt="Vision"
                             className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105"
                             onError={(e) => e.target.src = 'https://via.placeholder.com/400x300?text=Invalid+Image'}
                         />
-                        <button
-                            onClick={() => deleteItem.mutate(item.id)}
-                            className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black"
-                        >
-                            <Trash2 size={14} />
-                        </button>
+                        {!item.isDefault && (
+                            <button
+                                onClick={() => deleteItem.mutate(item.id)}
+                                className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        )}
                     </div>
                 ))}
             </div>
@@ -506,7 +546,7 @@ function Screensaver({ items, mission, onClose }) {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [onClose]);
 
-    const currentImage = items[currentIndex]?.content;
+    const currentImage = items[currentIndex]?.content ? getImageUrl(items[currentIndex].content) : null;
 
     return (
         <div className="fixed inset-0 z-50 bg-black flex items-center justify-center overflow-hidden">
