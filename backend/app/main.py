@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Annotated
 from . import models, schemas, auth, database
-from .routers import habits, projects, daily_notes, expenses, search, budgets, todos, learning, workouts, user_data, ai, resources, vision
+from .routers import habits, projects, daily_notes, expenses, search, budgets, todos, learning, workouts, user_data, ai, resources, vision, uploads
 from datetime import timedelta
 from jose import JWTError, jwt
 
