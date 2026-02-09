@@ -65,6 +65,7 @@ app.include_router(user_data.router)
 app.include_router(ai.router)
 app.include_router(resources.router)
 app.include_router(vision.router)
+app.include_router(uploads.router)
 
 @app.post("/auth/login", response_model=schemas.Token)
 async def login(

@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
-import { Plus, Image as ImageIcon, Trash2, Calendar, Edit3, X, Save, Eye, EyeOff, Target, ArrowUpRight, MonitorPlay, User, Maximize2 } from 'lucide-react';
+import { Plus, Image as ImageIcon, Trash2, Calendar, Edit3, X, Save, Eye, EyeOff, Target, ArrowUpRight, MonitorPlay, User, Maximize2, Upload, FileText } from 'lucide-react';
 import { differenceInDays, format } from 'date-fns';
+
+const DEFAULT_MISSION = "Draft your life mission. What is the one thing you must accomplish before you die?";
+const DEFAULT_ANTI_VISION = "Describe the hell you are running from. The version of you that gave up.";
 
 export default function VisionBoardPage() {
     const queryClient = useQueryClient();
     const [showAntiVision, setShowAntiVision] = useState(false);
     const [isScreensaver, setIsScreensaver] = useState(false);
+    const [isQuarterlyOpen, setIsQuarterlyOpen] = useState(false);
     const [isEditingMission, setIsEditingMission] = useState(false);
     const [missionText, setMissionText] = useState("");
 
@@ -35,11 +39,18 @@ export default function VisionBoardPage() {
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['vision'] })
     });
 
+    const uploadImage = async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await api.uploadFile(formData);
+        return res.data.url;
+    };
+
     // Filtering logic
-    const northStar = items.find(i => i.section === 'NORTH_STAR') || { content: "Draft your life mission..." };
+    const northStar = items.find(i => i.section === 'NORTH_STAR') || { content: DEFAULT_MISSION };
     const quarterly = items.filter(i => i.section === 'QUARTERLY').sort((a, b) => a.order - b.order);
     const identity = items.filter(i => i.section === 'IDENTITY').sort((a, b) => a.order - b.order);
-    const antiVision = items.find(i => i.section === 'ANTI_VISION') || { content: "Describe the hell you are running from..." };
+    const antiVision = items.find(i => i.section === 'ANTI_VISION') || { content: DEFAULT_ANTI_VISION };
     const visualBoard = items.filter(i => i.section === 'VISUAL_BOARD');
 
     // Countdown Logic
@@ -77,7 +88,19 @@ export default function VisionBoardPage() {
     }
 
     return (
-        <div className={`w-full max-w-[1920px] mx-auto px-6 md:px-12 py-8 md:py-12 transition-colors duration-1000 ${showAntiVision ? 'bg-[#1a0505]' : ''}`}>
+        <div className={`w-full max-w-[1920px] mx-auto px-6 md:px-12 py-8 md:py-12 transition-colors duration-1000 ${showAntiVision ? 'bg-[#1a0505]' : 'bg-background'}`}>
+
+            {/* Quarterly Modal */}
+            {isQuarterlyOpen && (
+                <QuarterlyModal
+                    items={quarterly}
+                    onClose={() => setIsQuarterlyOpen(false)}
+                    createItem={createItem}
+                    updateItem={updateItem}
+                    uploadImage={uploadImage}
+                />
+            )}
+
             {/* Header */}
             <div className="mb-12 flex items-end justify-between">
                 <div>
@@ -134,6 +157,7 @@ export default function VisionBoardPage() {
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-text-secondary">Life Mission</h2>
                                 <button
+                                    onMouseDown={(e) => e.preventDefault()} // Prevent blur from triggering before click
                                     onClick={() => {
                                         if (isEditingMission) handleSaveMission();
                                         else {
@@ -190,30 +214,164 @@ export default function VisionBoardPage() {
                             </div>
                         </section>
 
-                        {/* Quarterly Goals */}
-                        <section className="space-y-4">
-                            <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-text-secondary px-2">Quarterly Focus</h2>
-                            <div className="grid grid-cols-1 gap-4">
-                                {['Q1', 'Q2', 'Q3', 'Q4'].map((q, idx) => (
-                                    <QuarterlyCard
-                                        key={q}
-                                        quarter={q}
-                                        label={['Foundation', 'Expansion', 'Optimization', 'Reflection'][idx]}
-                                        items={quarterly}
-                                        createItem={createItem}
-                                        updateItem={updateItem}
-                                    />
-                                ))}
+                        {/* Quarterly Focus Banner (New) */}
+                        <button
+                            onClick={() => setIsQuarterlyOpen(true)}
+                            className="w-full bg-surface border border-white/5 hover:border-primary/50 p-6 rounded-2xl text-left group transition-all"
+                        >
+                            <div className="flex justify-between items-center mb-2">
+                                <div className="flex items-center gap-3">
+                                    <Calendar size={20} className="text-primary" />
+                                    <h2 className="text-lg font-bold text-text-primary">Quarterly Focus</h2>
+                                </div>
+                                <ArrowUpRight size={20} className="text-text-secondary group-hover:text-primary transition-colors" />
                             </div>
-                        </section>
+                            <p className="text-sm text-text-secondary">View your Q1-Q4 roadmap, images, and notes.</p>
+                        </button>
                     </div>
 
                     {/* Right Column: Visual Board */}
                     <div className="lg:col-span-8">
-                        <VisualBoard items={visualBoard} createItem={createItem} deleteItem={deleteItem} />
+                        <VisualBoard items={visualBoard} createItem={createItem} deleteItem={deleteItem} uploadImage={uploadImage} />
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+function QuarterlyModal({ items, onClose, createItem, updateItem, uploadImage }) {
+    const quarters = [
+        { id: 'Q1', label: 'Foundation' },
+        { id: 'Q2', label: 'Expansion' },
+        { id: 'Q3', label: 'Optimization' },
+        { id: 'Q4', label: 'Reflection' }
+    ];
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
+            <div className="w-full max-w-[95vw] h-[90vh] bg-background border border-white/10 rounded-3xl overflow-hidden flex flex-col relative">
+                <button onClick={onClose} className="absolute top-6 right-6 text-text-secondary hover:text-white z-20">
+                    <X size={24} />
+                </button>
+
+                <div className="p-8 border-b border-white/5">
+                    <h2 className="text-3xl font-bold tracking-tight">The Year Ahead</h2>
+                </div>
+
+                <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
+                    <div className="grid grid-cols-4 gap-6 h-full min-w-[1200px]">
+                        {quarters.map(q => (
+                            <QuarterlyColumn
+                                key={q.id}
+                                quarter={q}
+                                items={items}
+                                createItem={createItem}
+                                updateItem={updateItem}
+                                uploadImage={uploadImage}
+                            />
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function QuarterlyColumn({ quarter, items, createItem, updateItem, uploadImage }) {
+    const item = items.find(i => i.type === quarter.id) || { content: "" };
+
+    // Parse content
+    let data = { goals: "", notes: "", image: null };
+    try {
+        const parsed = JSON.parse(item.content);
+        if (typeof parsed === 'object') data = { ...data, ...parsed };
+    } catch {
+        data = { ...data, goals: item.content };
+    }
+
+    const fileInputRef = useRef(null);
+
+    const handleSave = (newData) => {
+        const content = JSON.stringify({ ...data, ...newData });
+        if (item.id) {
+            updateItem.mutate({ id: item.id, data: { content } });
+        } else {
+            createItem.mutate({
+                type: quarter.id,
+                content,
+                section: 'QUARTERLY',
+                order: quarter.id === 'Q1' ? 1 : quarter.id === 'Q2' ? 2 : quarter.id === 'Q3' ? 3 : 4
+            });
+        }
+    };
+
+    const handleFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const url = await uploadImage(file);
+            handleSave({ image: url });
+        } catch (err) {
+            alert("Upload failed");
+        }
+    };
+
+    return (
+        <div className="h-full bg-surface border border-white/5 rounded-2xl flex flex-col overflow-hidden group hover:border-primary/20 transition-all">
+            {/* Image Header */}
+            <div className={`h-48 relative bg-black/50 group-hover:h-56 transition-all duration-500 shrink-0`}>
+                <img
+                    src={data.image || `https://via.placeholder.com/600x400?text=${quarter.id}`}
+                    className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-surface to-transparent" />
+                <div className="absolute bottom-4 left-4">
+                    <h3 className="text-4xl font-black text-white">{quarter.id}</h3>
+                    <p className="text-sm font-bold text-primary uppercase tracking-widest">{quarter.label}</p>
+                </div>
+
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                />
+                <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-white text-white hover:text-black rounded-full transition-all"
+                >
+                    <Upload size={16} />
+                </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+                <div className="space-y-2">
+                    <label className="text-xs font-bold text-text-secondary uppercase flex items-center gap-2">
+                        <Target size={14} /> Key Objectives
+                    </label>
+                    <textarea
+                        className="w-full bg-transparent text-sm text-text-primary resize-none outline-none min-h-[150px] leading-relaxed"
+                        placeholder="- Goal 1&#10;- Goal 2&#10;- Goal 3"
+                        defaultValue={data.goals}
+                        onBlur={(e) => handleSave({ goals: e.target.value })}
+                    />
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-xs font-bold text-text-secondary uppercase flex items-center gap-2">
+                        <FileText size={14} /> Notes & Strategy
+                    </label>
+                    <textarea
+                        className="w-full bg-black/20 rounded-lg p-3 text-sm text-text-secondary resize-none outline-none min-h-[100px]"
+                        placeholder="Strategy for this quarter..."
+                        defaultValue={data.notes}
+                        onBlur={(e) => handleSave({ notes: e.target.value })}
+                    />
+                </div>
+            </div>
         </div>
     );
 }
@@ -265,7 +423,7 @@ function IdentityItem({ item, updateItem, deleteItem }) {
                     autoFocus
                 />
             ) : (
-                <span className="text-sm font-bold text-text-primary" onClick={() => setIsEditing(true)}>{item.content}</span>
+                <span className="text-sm font-bold text-text-primary cursor-pointer" onClick={() => setIsEditing(true)}>{item.content}</span>
             )}
             <button onClick={() => deleteItem.mutate(item.id)} className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-red-400">
                 <Trash2 size={12} />
@@ -274,131 +432,40 @@ function IdentityItem({ item, updateItem, deleteItem }) {
     );
 }
 
-function QuarterlyCard({ quarter, label, items, createItem, updateItem }) {
-    const goalItem = items.find(i => i.type === quarter) || { content: "" };
-
-    // Parse content if it's JSON, otherwise treat as string
-    let contentObj = { text: goalItem.content || "", image: null };
-    try {
-        const parsed = JSON.parse(goalItem.content);
-        if (typeof parsed === 'object') contentObj = parsed;
-    } catch (e) {
-        contentObj = { text: goalItem.content || "", image: null };
-    }
-
-    const [isHovered, setIsHovered] = useState(false);
-
-    const handleSaveText = (text) => {
-        const newContent = JSON.stringify({ ...contentObj, text });
-        save(newContent);
-    };
-
-    const handleAddImage = () => {
-        const url = prompt("Enter image URL for this goal:");
-        if (url) {
-            const newContent = JSON.stringify({ ...contentObj, image: url });
-            save(newContent);
-        }
-    };
-
-    const save = (content) => {
-        if (goalItem.id) {
-            updateItem.mutate({ id: goalItem.id, data: { content } });
-        } else {
-            createItem.mutate({
-                type: quarter,
-                content,
-                section: 'QUARTERLY',
-                order: quarter === 'Q1' ? 1 : 2
-            });
-        }
-    };
-
-    return (
-        <div
-            className="bg-surface border border-white/5 p-6 rounded-2xl group hover:border-primary/20 transition-all relative overflow-hidden"
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-        >
-            {/* Background Image */}
-            {contentObj.image && (
-                <div className="absolute inset-0 z-0 opacity-20 group-hover:opacity-30 transition-opacity">
-                    <img src={contentObj.image} alt="Goal bg" className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/80 to-transparent" />
-                </div>
-            )}
-
-            <div className="relative z-10">
-                <div className="flex justify-between items-center mb-4">
-                    <div className="flex items-center gap-3">
-                        <span className="text-xl font-black text-white/10">{quarter}</span>
-                        <span className="text-sm font-bold text-text-secondary uppercase tracking-wider">{label}</span>
-                    </div>
-                    {(isHovered || contentObj.image) && (
-                        <button onClick={handleAddImage} className="text-text-secondary hover:text-white p-1 rounded-lg bg-black/20 backdrop-blur-sm">
-                            <ImageIcon size={14} />
-                        </button>
-                    )}
-                </div>
-                <textarea
-                    className="w-full bg-transparent text-sm text-text-primary resize-none outline-none min-h-[80px] placeholder:text-text-secondary/50"
-                    placeholder={`Goals for ${quarter}...`}
-                    defaultValue={contentObj.text}
-                    onBlur={(e) => handleSaveText(e.target.value)}
-                />
-            </div>
-        </div>
-    );
-}
-
-function VisualBoard({ items, createItem, deleteItem }) {
+function VisualBoard({ items, createItem, deleteItem, uploadImage }) {
     const [isAdding, setIsAdding] = useState(false);
-    const [url, setUrl] = useState('');
+    const fileInputRef = useRef(null);
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        if (!url) return;
-        createItem.mutate({
-            type: 'IMAGE',
-            content: url,
-            section: 'VISUAL_BOARD',
-            order: Date.now()
-        });
-        setUrl('');
-        setIsAdding(false);
+    const handleFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const url = await uploadImage(file);
+            createItem.mutate({
+                type: 'IMAGE',
+                content: url,
+                section: 'VISUAL_BOARD',
+                order: Date.now()
+            });
+        } catch (err) {
+            alert("Upload failed");
+        }
     };
 
     return (
         <section className="space-y-6">
             <div className="flex items-center justify-between">
                 <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-text-secondary">Inspirations</h2>
+                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
                 <button
-                    onClick={() => setIsAdding(true)}
+                    onClick={() => fileInputRef.current?.click()}
                     className="flex items-center gap-2 bg-surface hover:bg-hover border border-border-subtle px-4 py-2 rounded-xl text-xs font-bold transition-all"
                 >
                     <Plus size={14} /> Add Image
                 </button>
             </div>
 
-            {isAdding && (
-                <form onSubmit={handleSubmit} className="bg-surface p-6 rounded-2xl border border-border-subtle animate-in slide-in-from-top-4 mb-6">
-                    <div className="space-y-4">
-                        <input
-                            className="w-full notion-input"
-                            placeholder="Image URL"
-                            value={url}
-                            onChange={(e) => setUrl(e.target.value)}
-                            autoFocus
-                        />
-                        <div className="flex gap-2 justify-end">
-                            <button type="button" onClick={() => setIsAdding(false)} className="px-4 py-2 text-xs font-bold text-text-secondary">Cancel</button>
-                            <button type="submit" className="px-4 py-2 bg-primary text-background rounded-lg text-xs font-bold">Add Pin</button>
-                        </div>
-                    </div>
-                </form>
-            )}
-
-            <div className="columns-1 md:columns-2 gap-4 space-y-4">
+            <div className="columns-1 md:columns-2 lg:columns-3 gap-4 space-y-4">
                 {items.map(item => (
                     <div key={item.id} className="break-inside-avoid relative group rounded-2xl overflow-hidden bg-surface mb-4">
                         <img
