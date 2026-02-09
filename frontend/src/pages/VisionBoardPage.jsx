@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
-import { Plus, Image as ImageIcon, Trash2, Calendar, Edit3, X, Save, Eye, EyeOff, Target, ArrowUpRight } from 'lucide-react';
+import { Plus, Image as ImageIcon, Trash2, Calendar, Edit3, X, Save, Eye, EyeOff, Target, ArrowUpRight, MonitorPlay, User, Maximize2 } from 'lucide-react';
 import { differenceInDays, format } from 'date-fns';
 
 export default function VisionBoardPage() {
     const queryClient = useQueryClient();
     const [showAntiVision, setShowAntiVision] = useState(false);
+    const [isScreensaver, setIsScreensaver] = useState(false);
     const [isEditingMission, setIsEditingMission] = useState(false);
     const [missionText, setMissionText] = useState("");
 
@@ -37,6 +38,7 @@ export default function VisionBoardPage() {
     // Filtering logic
     const northStar = items.find(i => i.section === 'NORTH_STAR') || { content: "Draft your life mission..." };
     const quarterly = items.filter(i => i.section === 'QUARTERLY').sort((a, b) => a.order - b.order);
+    const identity = items.filter(i => i.section === 'IDENTITY').sort((a, b) => a.order - b.order);
     const antiVision = items.find(i => i.section === 'ANTI_VISION') || { content: "Describe the hell you are running from..." };
     const visualBoard = items.filter(i => i.section === 'VISUAL_BOARD');
 
@@ -70,6 +72,10 @@ export default function VisionBoardPage() {
         }
     };
 
+    if (isScreensaver) {
+        return <Screensaver items={visualBoard} mission={northStar.content} onClose={() => setIsScreensaver(false)} />;
+    }
+
     return (
         <div className={`w-full max-w-[1920px] mx-auto px-6 md:px-12 py-8 md:py-12 transition-colors duration-1000 ${showAntiVision ? 'bg-[#1a0505]' : ''}`}>
             {/* Header */}
@@ -86,16 +92,24 @@ export default function VisionBoardPage() {
                     </p>
                 </div>
 
-                <button
-                    onClick={() => setShowAntiVision(!showAntiVision)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all ${showAntiVision
-                            ? 'bg-red-500/10 text-red-500 border border-red-500/20'
-                            : 'bg-surface border border-white/10 text-text-secondary hover:text-white'
-                        }`}
-                >
-                    {showAntiVision ? <EyeOff size={16} /> : <Eye size={16} />}
-                    {showAntiVision ? 'Return to Light' : 'View Anti-Vision'}
-                </button>
+                <div className="flex gap-4">
+                    <button
+                        onClick={() => setIsScreensaver(true)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all bg-surface border border-white/10 text-text-secondary hover:text-white"
+                    >
+                        <MonitorPlay size={16} /> Focus Mode
+                    </button>
+                    <button
+                        onClick={() => setShowAntiVision(!showAntiVision)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all ${showAntiVision
+                                ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                : 'bg-surface border border-white/10 text-text-secondary hover:text-white'
+                            }`}
+                    >
+                        {showAntiVision ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {showAntiVision ? 'Return to Light' : 'View Anti-Vision'}
+                    </button>
+                </div>
             </div>
 
             {showAntiVision ? (
@@ -160,14 +174,36 @@ export default function VisionBoardPage() {
                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 blur-3xl rounded-full -mr-10 -mt-10" />
                         </section>
 
+                        {/* Identity Shifting */}
+                        <section className="space-y-4">
+                            <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-text-secondary px-2 flex items-center gap-2">
+                                <User size={14} /> Identity Shifting
+                            </h2>
+                            <div className="bg-surface border border-white/5 p-6 rounded-2xl">
+                                <p className="text-xs text-text-secondary mb-4 italic">"I am the type of person who..."</p>
+                                <div className="space-y-2">
+                                    {identity.map(trait => (
+                                        <IdentityItem key={trait.id} item={trait} updateItem={updateItem} deleteItem={deleteItem} />
+                                    ))}
+                                    <IdentityInput createItem={createItem} />
+                                </div>
+                            </div>
+                        </section>
+
                         {/* Quarterly Goals */}
                         <section className="space-y-4">
                             <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-text-secondary px-2">Quarterly Focus</h2>
                             <div className="grid grid-cols-1 gap-4">
-                                <QuarterlyCard quarter="Q1" label="Foundation" items={quarterly} createItem={createItem} updateItem={updateItem} deleteItem={deleteItem} />
-                                <QuarterlyCard quarter="Q2" label="Expansion" items={quarterly} createItem={createItem} updateItem={updateItem} deleteItem={deleteItem} />
-                                <QuarterlyCard quarter="Q3" label="Optimization" items={quarterly} createItem={createItem} updateItem={updateItem} deleteItem={deleteItem} />
-                                <QuarterlyCard quarter="Q4" label="Reflection" items={quarterly} createItem={createItem} updateItem={updateItem} deleteItem={deleteItem} />
+                                {['Q1', 'Q2', 'Q3', 'Q4'].map((q, idx) => (
+                                    <QuarterlyCard
+                                        key={q}
+                                        quarter={q}
+                                        label={['Foundation', 'Expansion', 'Optimization', 'Reflection'][idx]}
+                                        items={quarterly}
+                                        createItem={createItem}
+                                        updateItem={updateItem}
+                                    />
+                                ))}
                             </div>
                         </section>
                     </div>
@@ -182,49 +218,135 @@ export default function VisionBoardPage() {
     );
 }
 
-function QuarterlyCard({ quarter, label, items, createItem, updateItem, deleteItem }) {
-    // Determine order range for quarters: Q1=1-3, Q2=4-6 etc. or just strict string matching if we used section tags properly
-    // For simplicity let's stick to filtering by "content" containing a tag or just using a specific key.
-    // Actually, let's implement a simple goal list for each quarter card.
+function IdentityInput({ createItem }) {
+    const [text, setText] = useState('');
 
-    // We will filter items by section 'QUARTERLY' and we might need to store the quarter in 'type' or metadata.
-    // Let's repurpose 'type' field to store 'Q1', 'Q2', etc for now, or just use the card state locally if we want a strict structure.
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!text.trim()) return;
+        createItem.mutate({
+            type: 'TEXT',
+            content: text,
+            section: 'IDENTITY',
+            order: Date.now()
+        });
+        setText('');
+    };
 
-    // BETTER APPROACH: Just show goals that user inputs.
+    return (
+        <form onSubmit={handleSubmit}>
+            <input
+                className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-primary outline-none"
+                placeholder="Add a trait..."
+                value={text}
+                onChange={e => setText(e.target.value)}
+            />
+        </form>
+    );
+}
 
-    // Filter logic: This is a bit tricky without a dedicated field.
-    // Let's optimize: We'll filter by `content` starting with "Q1:" manually or just use a dedicated JSON structure later.
-    // For MVP: We render a text area for each quarter that auto-saves to a dedicated VisionItem with section="QUARTERLY" and type=quarter.
+function IdentityItem({ item, updateItem, deleteItem }) {
+    const [isEditing, setIsEditing] = useState(false);
+    const [text, setText] = useState(item.content);
 
+    const handleSave = () => {
+        updateItem.mutate({ id: item.id, data: { content: text } });
+        setIsEditing(false);
+    };
+
+    return (
+        <div className="group flex items-center justify-between py-2 border-b border-white/5 last:border-0 hover:bg-white/5 px-2 rounded-lg transition-colors">
+            {isEditing ? (
+                <input
+                    className="bg-transparent outline-none text-sm w-full font-bold text-primary"
+                    value={text}
+                    onChange={e => setText(e.target.value)}
+                    onBlur={handleSave}
+                    autoFocus
+                />
+            ) : (
+                <span className="text-sm font-bold text-text-primary" onClick={() => setIsEditing(true)}>{item.content}</span>
+            )}
+            <button onClick={() => deleteItem.mutate(item.id)} className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-red-400">
+                <Trash2 size={12} />
+            </button>
+        </div>
+    );
+}
+
+function QuarterlyCard({ quarter, label, items, createItem, updateItem }) {
     const goalItem = items.find(i => i.type === quarter) || { content: "" };
 
-    const handleSave = (text) => {
+    // Parse content if it's JSON, otherwise treat as string
+    let contentObj = { text: goalItem.content || "", image: null };
+    try {
+        const parsed = JSON.parse(goalItem.content);
+        if (typeof parsed === 'object') contentObj = parsed;
+    } catch (e) {
+        contentObj = { text: goalItem.content || "", image: null };
+    }
+
+    const [isHovered, setIsHovered] = useState(false);
+
+    const handleSaveText = (text) => {
+        const newContent = JSON.stringify({ ...contentObj, text });
+        save(newContent);
+    };
+
+    const handleAddImage = () => {
+        const url = prompt("Enter image URL for this goal:");
+        if (url) {
+            const newContent = JSON.stringify({ ...contentObj, image: url });
+            save(newContent);
+        }
+    };
+
+    const save = (content) => {
         if (goalItem.id) {
-            updateItem.mutate({ id: goalItem.id, data: { content: text } });
+            updateItem.mutate({ id: goalItem.id, data: { content } });
         } else {
             createItem.mutate({
                 type: quarter,
-                content: text,
+                content,
                 section: 'QUARTERLY',
-                order: quarter === 'Q1' ? 1 : 2 // Simple ordering
+                order: quarter === 'Q1' ? 1 : 2
             });
         }
     };
 
     return (
-        <div className="bg-surface border border-white/5 p-6 rounded-2xl group hover:border-primary/20 transition-all">
-            <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center gap-3">
-                    <span className="text-xl font-black text-white/10">{quarter}</span>
-                    <span className="text-sm font-bold text-text-secondary uppercase tracking-wider">{label}</span>
+        <div
+            className="bg-surface border border-white/5 p-6 rounded-2xl group hover:border-primary/20 transition-all relative overflow-hidden"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
+            {/* Background Image */}
+            {contentObj.image && (
+                <div className="absolute inset-0 z-0 opacity-20 group-hover:opacity-30 transition-opacity">
+                    <img src={contentObj.image} alt="Goal bg" className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/80 to-transparent" />
                 </div>
+            )}
+
+            <div className="relative z-10">
+                <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-3">
+                        <span className="text-xl font-black text-white/10">{quarter}</span>
+                        <span className="text-sm font-bold text-text-secondary uppercase tracking-wider">{label}</span>
+                    </div>
+                    {(isHovered || contentObj.image) && (
+                        <button onClick={handleAddImage} className="text-text-secondary hover:text-white p-1 rounded-lg bg-black/20 backdrop-blur-sm">
+                            <ImageIcon size={14} />
+                        </button>
+                    )}
+                </div>
+                <textarea
+                    className="w-full bg-transparent text-sm text-text-primary resize-none outline-none min-h-[80px] placeholder:text-text-secondary/50"
+                    placeholder={`Goals for ${quarter}...`}
+                    defaultValue={contentObj.text}
+                    onBlur={(e) => handleSaveText(e.target.value)}
+                />
             </div>
-            <textarea
-                className="w-full bg-transparent text-sm text-text-primary resize-none outline-none min-h-[80px]"
-                placeholder={`Goals for ${quarter}...`}
-                defaultValue={goalItem.content}
-                onBlur={(e) => handleSave(e.target.value)}
-            />
         </div>
     );
 }
@@ -232,19 +354,17 @@ function QuarterlyCard({ quarter, label, items, createItem, updateItem, deleteIt
 function VisualBoard({ items, createItem, deleteItem }) {
     const [isAdding, setIsAdding] = useState(false);
     const [url, setUrl] = useState('');
-    const [caption, setCaption] = useState('');
 
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!url) return;
         createItem.mutate({
             type: 'IMAGE',
-            content: url, // For now assuming just URL. Ideally: JSON.stringify({url, caption})
+            content: url,
             section: 'VISUAL_BOARD',
             order: Date.now()
         });
         setUrl('');
-        setCaption('');
         setIsAdding(false);
     };
 
@@ -297,5 +417,63 @@ function VisualBoard({ items, createItem, deleteItem }) {
                 ))}
             </div>
         </section>
+    );
+}
+
+function Screensaver({ items, mission, onClose }) {
+    const [currentIndex, setCurrentIndex] = useState(0);
+
+    useEffect(() => {
+        if (items.length === 0) return;
+        const interval = setInterval(() => {
+            setCurrentIndex(prev => (prev + 1) % items.length);
+        }, 5000); // Change every 5 seconds
+        return () => clearInterval(interval);
+    }, [items]);
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
+
+    const currentImage = items[currentIndex]?.content;
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black flex items-center justify-center overflow-hidden">
+            {/* Background Slideshow */}
+            {currentImage && (
+                <div className="absolute inset-0">
+                    <img
+                        src={currentImage}
+                        alt="Screensaver"
+                        className="w-full h-full object-cover opacity-40 animate-in fade-in duration-1000 key={currentIndex}"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+                </div>
+            )}
+
+            {/* Mission Overlay */}
+            <div className="relative z-10 max-w-4xl px-8 text-center animate-in zoom-in-95 duration-1000">
+                <p className="text-2xl md:text-4xl font-serif italic text-white leading-relaxed drop-shadow-2xl">
+                    "{mission}"
+                </p>
+                <div className="mt-8 flex justify-center gap-2">
+                    <div className="w-16 h-1 bg-primary rounded-full" />
+                </div>
+            </div>
+
+            <button
+                onClick={onClose}
+                className="absolute top-8 right-8 text-white/50 hover:text-white transition-colors"
+            >
+                <X size={24} />
+            </button>
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/30 text-xs uppercase tracking-widest animate-pulse">
+                Focus Mode Active
+            </div>
+        </div>
     );
 }
