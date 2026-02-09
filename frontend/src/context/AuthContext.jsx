@@ -9,14 +9,19 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         const initAuth = async () => {
-            const token = localStorage.getItem('access_token');
+            const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
             if (token) {
                 try {
+                    // Update client with token immediately to prevent 401 on first call
+                    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
                     const { data } = await api.get('/users/me');
                     setUser(data);
                 } catch (err) {
                     localStorage.removeItem('access_token');
                     localStorage.removeItem('refresh_token');
+                    sessionStorage.removeItem('access_token');
+                    sessionStorage.removeItem('refresh_token');
                 }
             }
             setLoading(false);
@@ -24,14 +29,21 @@ export const AuthProvider = ({ children }) => {
         initAuth();
     }, []);
 
-    const login = async (email, password) => {
+    const login = async (email, password, remember = true) => {
         const params = new URLSearchParams();
         params.append('username', email);
         params.append('password', password);
 
         const { data } = await api.post('/auth/login', params);
-        localStorage.setItem('access_token', data.access_token);
-        localStorage.setItem('refresh_token', data.refresh_token);
+
+        const storage = remember ? localStorage : sessionStorage;
+        storage.setItem('access_token', data.access_token);
+        storage.setItem('refresh_token', data.refresh_token);
+
+        // Clear other storage to avoid conflicts
+        const other = remember ? sessionStorage : localStorage;
+        other.removeItem('access_token');
+        other.removeItem('refresh_token');
 
         const userRes = await api.get('/users/me');
         setUser(userRes.data);

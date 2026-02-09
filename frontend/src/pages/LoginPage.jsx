@@ -8,6 +8,8 @@ import { ArrowRight, Lock, Mail } from 'lucide-react';
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const { login } = useAuth();
@@ -18,7 +20,7 @@ export default function LoginPage() {
         setError('');
         setIsLoading(true);
         try {
-            await login(email, password);
+            await login(email, password, rememberMe);
             navigate('/');
         } catch (err) {
             setError(err.response?.data?.detail || 'Failed to login');
@@ -94,20 +96,36 @@ export default function LoginPage() {
                                 <div className="relative">
                                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary group-focus-within:text-primary transition-colors" size={18} />
                                     <input
-                                        type="password"
+                                        type={showPassword ? "text" : "password"}
                                         required
-                                        className="w-full bg-surface border-2 border-border-subtle focus:border-primary rounded-xl pl-10 pr-4 py-3 text-sm outline-none transition-all placeholder:text-text-secondary/30"
+                                        className="w-full bg-surface border-2 border-border-subtle focus:border-primary rounded-xl pl-10 pr-10 py-3 text-sm outline-none transition-all placeholder:text-text-secondary/30"
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
                                         placeholder="••••••••"
                                     />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors"
+                                    >
+                                        {showPassword ? (
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" /><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" x2="22" y1="2" y2="22" /></svg>
+                                        ) : (
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>
+                                        )}
+                                    </button>
                                 </div>
                             </div>
                         </div>
 
                         <div className="flex items-center justify-between">
                             <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary/20 accent-primary" />
+                                <input
+                                    type="checkbox"
+                                    checked={rememberMe}
+                                    onChange={(e) => setRememberMe(e.target.checked)}
+                                    className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary/20 accent-primary"
+                                />
                                 <span className="text-xs text-text-secondary">Remember me</span>
                             </label>
                             <Link to="/forgot-password" size="sm" className="text-xs font-bold text-primary hover:underline">Forgot password?</Link>

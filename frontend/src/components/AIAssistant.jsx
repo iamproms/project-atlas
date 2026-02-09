@@ -57,7 +57,7 @@ export default function AIAssistant() {
     };
 
     return (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+        <div className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 flex flex-col items-end">
             {isOpen && (
                 <div className="bg-surface border border-border-subtle rounded-2xl shadow-2xl w-80 md:w-96 mb-4 overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-300 flex flex-col max-h-[500px]">
                     {/* Header */}
